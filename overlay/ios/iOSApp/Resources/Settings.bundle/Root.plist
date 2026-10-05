@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com> -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Title</key>
+			<string>Appearance</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>system</string>
+			<key>Key</key>
+			<string>appearance</string>
+			<key>Title</key>
+			<string>Appearance</string>
+			<key>Titles</key>
+			<array>
+				<string>System</string>
+				<string>Light</string>
+				<string>Dark</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>system</string>
+				<string>light</string>
+				<string>dark</string>
+			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>System</string>
+			<key>Key</key>
+			<string>lightTheme</string>
+			<key>Title</key>
+			<string>Light Theme</string>
+			<key>Titles</key>
+			<array>
+				<string>System</string>
+				<string>High Contrast</string>
+				<string>Nord</string>
+				<string>Paper Light</string>
+				<string>Solarized Light</string>
+				<string>Warm Dark</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>System</string>
+				<string>High Contrast</string>
+				<string>Nord</string>
+				<string>Paper Light</string>
+				<string>Solarized Light</string>
+				<string>Warm Dark</string>
+			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>System</string>
+			<key>Key</key>
+			<string>darkTheme</string>
+			<key>Title</key>
+			<string>Dark Theme</string>
+			<key>Titles</key>
+			<array>
+				<string>System</string>
+				<string>High Contrast</string>
+				<string>Nord</string>
+				<string>Paper Light</string>
+				<string>Solarized Light</string>
+				<string>Warm Dark</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<string>System</string>
+				<string>High Contrast</string>
+				<string>Nord</string>
+				<string>Paper Light</string>
+				<string>Solarized Light</string>
+				<string>Warm Dark</string>
+			</array>
+		</dict>
+		<dict>
+			<key>FooterText</key>
+			<string>Line width is a maximum; a narrow screen wraps sooner. Full width fills the screen.</string>
+			<key>Title</key>
+			<string>Text</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<integer>0</integer>
+			<key>Key</key>
+			<string>textSizeAdjustment</string>
+			<key>Title</key>
+			<string>Text Size</string>
+			<key>Titles</key>
+			<array>
+				<string>−4 pt</string>
+				<string>−2 pt</string>
+				<string>Default</string>
+				<string>+2 pt</string>
+				<string>+4 pt</string>
+				<string>+6 pt</string>
+				<string>+8 pt</string>
+				<string>+10 pt</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<integer>-4</integer>
+				<integer>-2</integer>
+				<integer>0</integer>
+				<integer>2</integer>
+				<integer>4</integer>
+				<integer>6</integer>
+				<integer>8</integer>
+				<integer>10</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<integer>70</integer>
+			<key>Key</key>
+			<string>measureCharacters</string>
+			<key>Title</key>
+			<string>Line Width</string>
+			<key>Titles</key>
+			<array>
+				<string>68 characters</string>
+				<string>70 characters</string>
+				<string>72 characters</string>
+				<string>90 characters</string>
+				<string>120 characters</string>
+				<string>Full width</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<integer>68</integer>
+				<integer>70</integer>
+				<integer>72</integer>
+				<integer>90</integer>
+				<integer>120</integer>
+				<integer>1000</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>FooterText</key>
+			<string>Shows images from the web, such as README badges. Loading one tells its server your IP address and when you opened the document.</string>
+			<key>Title</key>
+			<string>Images</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<true/>
+			<key>Key</key>
+			<string>loadsRemoteImages</string>
+			<key>Title</key>
+			<string>Load Remote Images</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
+	</array>
+</dict>
+</plist>

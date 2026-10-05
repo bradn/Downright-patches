@@ -1,0 +1,26 @@
+// Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+//
+// Signing and identity for the iOS app.  These are placeholders, enough for
+// the simulator and Scripts/check-ios.sh, which need no account.  To run on a
+// device, put your own values in Signing.local.xcconfig next to this file
+// (git-ignored, so they never get committed):
+//
+//   DOWNRIGHT_BUNDLE_PREFIX = com.yourname
+//   DEVELOPMENT_TEAM = ABCDE12345
+//
+// The bundle IDs become <prefix>.downright.ios and <prefix>.downright.ios.tests.
+// Your team ID is in Xcode › Settings › Accounts, or at developer.apple.com
+// under Membership.  Regenerate the project afterwards: `xcodegen generate`.
+DOWNRIGHT_BUNDLE_PREFIX = com.example
+DEVELOPMENT_TEAM =
+
+// Why an optional include rather than XcodeGen's `configFiles` pointing at
+// the local file: XcodeGen refuses to generate a project when a listed config
+// file is missing ("Spec validation error: Invalid config file"; checked with
+// XcodeGen in this repository's toolchain).  Anyone without a local file,
+// including Scripts/check-ios.sh, would get no project at all.  So
+// `configFiles` names this committed file, which always exists, and Xcode's
+// `#include?` (the `?` makes it optional) layers personal values on top when
+// they are present.  Personal IDs therefore never need to be committed, and
+// the simulator build needs no setup.
+#include? "Signing.local.xcconfig"

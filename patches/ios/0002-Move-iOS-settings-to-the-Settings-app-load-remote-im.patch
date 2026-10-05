@@ -1,0 +1,389 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 01:50:22 -0400
+Subject: [PATCH 2/6] Move iOS settings to the Settings app; load remote images
+ on iOS
+
+Settings: appearance, themes, text size and line width move from a
+toolbar popover to Settings > Apps > Downright (Settings.bundle). The
+store keeps one UserDefaults key per setting, migrates the JSON blob
+earlier builds saved (at launch, so the Settings page is right before a
+document opens), and re-applies on returning from the Settings app.
+
+Remote images: MarkdownRender gains a RemoteImageLoading hook on the
+fragment context; https: images (own-line Markdown images and HTML
+<img>) render only when a host installs a loader. The Mac app and Quick
+Look never do, so they stay blocked or inert. The iOS app's loader is
+cookie-free and size- and time-limited, draws SVG through a hidden,
+script-free WebKit canvas, and is controlled by a Load Remote Images
+switch (on by default).
+
+SafeHTML now drops harmless presentational attributes (width, class,
+style, ...) and accepts unquoted values instead of rejecting the block,
+and marks https: images as .remoteImage. Images inside a paragraph or
+link still are not drawn as pictures; that needs inline image layout.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ AGENTS.md                                     |  1 +
+ Sources/MarkdownCore/SafeHTML.swift           | 58 +++++++++++++++----
+ .../Engine/DecorationEngine.swift             | 50 ++++++++++++----
+ .../MarkdownRender/Engine/MarkerPolicy.swift  |  2 +-
+ .../Fragments/FragmentBase.swift              |  3 +
+ .../Fragments/ImageFragment.swift             | 29 ++++++++++
+ Tests/MarkdownCoreTests/SafeHTMLTests.swift   | 39 ++++++++++++-
+ .../SafeHTMLRenderTests.swift                 | 20 +++++++
+ 8 files changed, 175 insertions(+), 27 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 2fe160d..5555f7d 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -33,6 +33,7 @@ This file contains Downright-specific context, invariants, and evidence gates. F
+ 
+ - For code changes, use focused tests while iterating, then run `Scripts/check.sh` as the authoritative source gate. For documentation-only changes, inspect content, links, and referenced commands without rebuilding the app. Do not substitute bare `swift test`; zero executed tests or a masked pipeline failure is a failed gate.
+ - When a change touches `MarkdownCore` or the shared (non-`View/`) half of `MarkdownRender`, also run `Scripts/check-ios.sh`. It requires Xcode and builds for iOS devices and the simulator. It also generates and tests the read-only iOS app in `iOSApp/` when XcodeGen is installed. It does not replace `Scripts/check.sh`. The iOS app is not a release surface: nothing in `Docs/RELEASE.md` covers it. Shared code names platform types through `MarkdownRender/Platform/Platform.swift`, not `NSColor`/`NSFont`/`NSImage` directly.
++- Remote images: `MarkdownCore` and `MarkdownRender` never make network requests. `https:` images render only through a `RemoteImageLoading` a host installs on its view; the Mac app and Quick Look never install one, so there they stay blocked or inert. The iOS app installs its loader while Settings › Apps › Downright › Load Remote Images is on (the default): cookie-free, size- and time-limited fetches, with SVG drawn in an off-screen, script-free WebKit view.
+ - Give concurrent checks unique scratch/build locations using the supported variables: `SCRATCH`, `TEST_SCRATCH`, `APP_ACCEPTANCE_SCRATCH`, `SPOTLIGHT_SCRATCH`, and `IOS_SCRATCH` (for `Scripts/check-ios.sh`). Release benchmarks default to `${SCRATCH}-bench`; `BENCH_SCRATCH` can override that location. If source, `HEAD`, or relevant outputs change during validation, discard the result and rerun on the intended snapshot.
+ - `Scripts/bundle-app.sh` is appropriate for host-only iteration but does not prove Finder extensions. Use `Scripts/bundle-xcode-app.sh` and `Scripts/check-app.sh` for Quick Look, thumbnails, Finder integration, or production-shaped app acceptance. Development/ad-hoc bundles do not prove production Sparkle behavior. Every nested Mach-O must support all architectures of its host; universal release archives must include Intel and Apple Silicon CLI and Spotlight binaries.
+ - When the installed app is the acceptance surface, install the intended artifact explicitly with `APP_SOURCE=... Scripts/install.sh`, stop stale Downright instances when safe, and verify bundle path, version/build, executable identity, signature, embedded components, and running process before exercising the feature.
+diff --git a/Sources/MarkdownCore/SafeHTML.swift b/Sources/MarkdownCore/SafeHTML.swift
+index c825491..e1ebd4c 100644
+--- a/Sources/MarkdownCore/SafeHTML.swift
++++ b/Sources/MarkdownCore/SafeHTML.swift
+@@ -11,8 +11,13 @@ public enum SafeHTMLKind: Sendable, Equatable {
+     case emphasis
+     case link(destination: String, title: String?)
+     case image(source: String, alt: String)
+-    /// A recognized but deliberately non-rendered tag, such as a remote image.
+-    /// Its source remains visible and no network or file access is attempted.
++    /// An `https:` image.  The parser never fetches it; a renderer shows it
++    /// only when its host has opted in to remote images, and otherwise treats
++    /// it exactly like `inert`.
++    case remoteImage(source: String, alt: String)
++    /// A recognized but deliberately non-rendered tag, such as an image with
++    /// an unsupported source.  Its source remains visible and no network or
++    /// file access is attempted.
+     case inert
+     case lineBreak
+     case details(open: Bool)
+@@ -355,6 +360,16 @@ public enum SafeHTMLParser {
+ 
+     private static let allowedNames: Set<String> = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "strong", "b", "em", "i", "a", "img", "br", "details", "summary", "table", "thead", "tbody", "tr", "th", "td"]
+ 
++    /// Presentational attributes README HTML commonly carries.  A native
++    /// reader has no use for them, so they are dropped instead of rejecting
++    /// the whole block.  Anything else unknown, and every `on…` handler, still
++    /// rejects it.
++    private static let ignoredAttributes: Set<String> = [
++        "width", "height", "align", "valign", "border", "hspace", "vspace",
++        "class", "id", "style", "dir", "lang", "target", "rel",
++        "loading", "decoding", "referrerpolicy",
++    ]
++
+     private static func attributes(in raw: String, for name: String) -> [String: String]? {
+         var result: [String: String] = [:]
+         var index = raw.startIndex
+@@ -375,14 +390,24 @@ public enum SafeHTMLParser {
+             index = raw.index(after: index)
+             while index < raw.endIndex, raw[index].isWhitespace { index = raw.index(after: index) }
+             guard index < raw.endIndex else { return nil }
++            let value: String
+             let quote = raw[index]
+-            guard quote == "\"" || quote == "'" else { return nil }
+-            index = raw.index(after: index)
+-            let valueStart = index
+-            while index < raw.endIndex, raw[index] != quote { index = raw.index(after: index) }
+-            guard index < raw.endIndex else { return nil }
+-            let value = String(raw[valueStart..<index])
+-            index = raw.index(after: index)
++            if quote == "\"" || quote == "'" {
++                index = raw.index(after: index)
++                let valueStart = index
++                while index < raw.endIndex, raw[index] != quote { index = raw.index(after: index) }
++                guard index < raw.endIndex else { return nil }
++                value = String(raw[valueStart..<index])
++                index = raw.index(after: index)
++            } else {
++                // HTML allows unquoted values (`width=128`); they end at
++                // whitespace and may not contain quotes, `=`, `<`, `>` or `` ` ``.
++                let valueStart = index
++                while index < raw.endIndex, !raw[index].isWhitespace { index = raw.index(after: index) }
++                value = String(raw[valueStart..<index])
++                guard !value.contains(where: { "\"'=<>`".contains($0) }) else { return nil }
++            }
++            if !allowedAttribute(key, for: name), ignoredAttributes.contains(key) { continue }
+             guard allowedAttribute(key, for: name),
+                   (name == "img" && key == "src" || safeURL(value, for: key, tag: name))
+             else { return nil }
+@@ -423,8 +448,10 @@ public enum SafeHTMLParser {
+         case "a": guard let href = attributes["href"] else { return nil }; return .link(destination: href, title: attributes["title"])
+         case "img":
+             guard let src = attributes["src"] else { return nil }
+-            guard safeLocalImageSource(src) else { return .inert }
+-            return .image(source: src, alt: attributes["alt"] ?? "")
++            let alt = attributes["alt"] ?? ""
++            if safeLocalImageSource(src) { return .image(source: src, alt: alt) }
++            if remoteImageSource(src) { return .remoteImage(source: src, alt: alt) }
++            return .inert
+         case "br": return .lineBreak
+         case "details": return .details(open: attributes["open"] != nil)
+         case "summary": return .summary
+@@ -436,6 +463,15 @@ public enum SafeHTMLParser {
+         }
+     }
+ 
++    /// `https:` only: plain `http:` images would be blocked by App Transport
++    /// Security anyway, and a cleartext fetch leaks the URL on the wire.
++    private static func remoteImageSource(_ source: String) -> Bool {
++        let value = source.trimmingCharacters(in: .whitespacesAndNewlines)
++        guard value.lowercased().hasPrefix("https://"),
++              let url = URL(string: value), url.host?.isEmpty == false else { return false }
++        return true
++    }
++
+     private static func safeLocalImageSource(_ source: String) -> Bool {
+         let value = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+         return !value.isEmpty
+diff --git a/Sources/MarkdownRender/Engine/DecorationEngine.swift b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+index a3f53a3..2befc8c 100644
+--- a/Sources/MarkdownRender/Engine/DecorationEngine.swift
++++ b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+@@ -60,6 +60,18 @@ public final class DecorationEngine {
+         }
+     }
+ 
++    /// Whether HTML `https:` images become image fragments.  Off by default,
++    /// and the Mac never turns it on: there a remote image stays inert, as
++    /// before.  The iOS reader turns it on only when its host has installed a
++    /// remote image loader, so the engine itself never touches the network.
++    public var loadsRemoteImages = false {
++        didSet {
++            guard loadsRemoteImages != oldValue else { return }
++            programCache.removeAll(keepingCapacity: true)
++            programSeen.removeAll(keepingCapacity: true)
++        }
++    }
++
+     public var codeCollapseLineCount: Int {
+         get { collapseLineCount }
+         set { collapseLineCount = min(10_000, max(1, newValue)) }
+@@ -993,18 +1005,15 @@ public final class DecorationEngine {
+                 ], to: annotation.contentRange, state: &state)
+ 
+             case .image(let source, let alt):
+-                let payload = FragmentPayload(
+-                    kind: .image,
+-                    sourceRange: annotation.range,
+-                    blockIdentity: block.identity,
+-                    detail: source
+-                )
+-                apply([
+-                    .drFragment: payload,
+-                    .drLink: source,
+-                    .drReference: alt,
+-                ], to: annotation.range, state: &state)
+-                state.fragmentCount += 1
++                applyHTMLImage(source: source, alt: alt, annotation: annotation, block: block, state: &state)
++
++            case .remoteImage(let source, let alt):
++                if loadsRemoteImages {
++                    applyHTMLImage(source: source, alt: alt, annotation: annotation, block: block, state: &state)
++                } else {
++                    apply([.foregroundColor: styleSheet.textFaint],
++                          to: annotation.range, state: &state)
++                }
+ 
+             case .summary:
+                 // Keep the summary visually distinct even though the source
+@@ -1065,6 +1074,23 @@ public final class DecorationEngine {
+         }
+     }
+ 
++    private func applyHTMLImage(
++        source: String, alt: String, annotation: SafeHTMLAnnotation, block: MDBlock, state: inout DecorateState
++    ) {
++        let payload = FragmentPayload(
++            kind: .image,
++            sourceRange: annotation.range,
++            blockIdentity: block.identity,
++            detail: source
++        )
++        apply([
++            .drFragment: payload,
++            .drLink: source,
++            .drReference: alt,
++        ], to: annotation.range, state: &state)
++        state.fragmentCount += 1
++    }
++
+     /// Bold and italic inside a heading must stay at the heading's size, so
+     /// traits are derived from the block's own font unless the block is at body
+     /// size — where the theme's `emphasisFont` gets to make the call (§11.1).
+diff --git a/Sources/MarkdownRender/Engine/MarkerPolicy.swift b/Sources/MarkdownRender/Engine/MarkerPolicy.swift
+index 46618f0..de408ad 100644
+--- a/Sources/MarkdownRender/Engine/MarkerPolicy.swift
++++ b/Sources/MarkdownRender/Engine/MarkerPolicy.swift
+@@ -73,7 +73,7 @@ public enum MarkerPolicy {
+                     // source range, so hiding the range as a marker would also
+                     // hide the fragment's display substitution.
+                     switch annotation.kind {
+-                    case .image, .inert: continue
++                    case .image, .remoteImage, .inert: continue
+                     default: break
+                     }
+                     out.append(contentsOf: annotation.tagRanges)
+diff --git a/Sources/MarkdownRender/Fragments/FragmentBase.swift b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+index b6aa3a8..aa6859a 100644
+--- a/Sources/MarkdownRender/Fragments/FragmentBase.swift
++++ b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+@@ -102,6 +102,9 @@ public final class FragmentContext {
+     /// Existing app trust, if any. Rendering never prompts; a `false`/`nil`
+     /// decision leaves unsafe image destinations visibly blocked.
+     public var localAssetAuthorizer: ((URL) -> Bool)?
++    /// Fetches `https:` images when the host has opted in; `nil` keeps them
++    /// blocked.  The Mac never sets it.
++    public var remoteImageLoader: RemoteImageLoading?
+     /// Paragraph structure of the current text, for line counts and collapse.
+     var paragraphIndex: ParagraphIndex = .empty
+     /// Zoom + fold + search visibility (§5.2, §7.1, §9.4).
+diff --git a/Sources/MarkdownRender/Fragments/ImageFragment.swift b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+index 631b428..4c66bbb 100644
+--- a/Sources/MarkdownRender/Fragments/ImageFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+@@ -178,6 +178,7 @@ final class ImageFragment: DownrightFragment {
+     }
+ 
+     private func loadResult() -> LoadResult {
++        if let (url, loader) = remoteRequest() { return remoteResult(url, loader: loader) }
+         guard let request = resolvedRequest() else { return .blocked }
+         guard LocalAssetPolicy.allows(
+             request, authorizer: context?.localAssetAuthorizer
+@@ -240,6 +241,34 @@ final class ImageFragment: DownrightFragment {
+         return min(2048, max(1, Int(ceil(points * scale))))
+     }
+ 
++    /// An `https:` destination and the host's loader, when it installed one.
++    private func remoteRequest() -> (URL, RemoteImageLoading)? {
++        guard let loader = context?.remoteImageLoader else { return nil }
++        let raw = payload.detail.trimmingCharacters(in: .whitespacesAndNewlines)
++        guard raw.lowercased().hasPrefix("https://"),
++              let url = URL(string: raw), url.host?.isEmpty == false else { return nil }
++        return (url, loader)
++    }
++
++    /// Same shape as the local path: a cached picture draws, a miss starts a
++    /// load and draws the placeholder.  The loader remembers failures, so a
++    /// broken image settles on the missing placeholder instead of refetching
++    /// on every layout pass, and the completion can invalidate either way.
++    private func remoteResult(_ url: URL, loader: RemoteImageLoading) -> LoadResult {
++        let dimension = targetPixelDimension
++        if let image = loader.cachedImage(for: url, maxPixelDimension: dimension) { return .loaded(image) }
++        if loader.hasFailed(url) { return .missing }
++        #if os(macOS)
++        let box = ImageLoadCompletionBox(view: context?.textView, payload: payload)
++        #else
++        let box = ImageLoadCompletionBox(view: context?.readerView, payload: payload)
++        #endif
++        loader.loadImage(for: url, maxPixelDimension: dimension) { _ in
++            box.view?.invalidateFragments(in: box.payload.sourceRange)
++        }
++        return .loading
++    }
++
+     private func resolvedRequest() -> LocalAssetRequest? {
+         LocalAssetPolicy.request(raw: payload.detail, documentURL: context?.documentURL)
+     }
+diff --git a/Tests/MarkdownCoreTests/SafeHTMLTests.swift b/Tests/MarkdownCoreTests/SafeHTMLTests.swift
+index 14d5fdd..56df6f7 100644
+--- a/Tests/MarkdownCoreTests/SafeHTMLTests.swift
++++ b/Tests/MarkdownCoreTests/SafeHTMLTests.swift
+@@ -138,12 +138,45 @@ struct SafeHTMLTests {
+         #expect(annotations.contains { if case .detailsClosing = $0.kind { true } else { false } })
+     }
+ 
+-    @Test func remoteImagesStayVisibleButInertInsideSafeParents() throws {
++    @Test func remoteImagesAreMarkedRemoteNotFetchedInsideSafeParents() throws {
+         let source = #"<p align="center"><img src="https://tracker.example/pixel.png" alt="remote"></p>"#
+         let parsed = MarkdownParser.parse(source)
+         let html = try #require(parsed.root.children.first?.safeHTML)
+         #expect(html.isSafe)
+-        #expect(html.annotations.contains { if case .inert = $0.kind { true } else { false } })
++        #expect(html.annotations.contains {
++            $0.kind == .remoteImage(source: "https://tracker.example/pixel.png", alt: "remote")
++        })
++    }
++
++    @Test func cleartextAndProtocolRelativeImagesStayInert() throws {
++        for src in ["http://tracker.example/pixel.png", "//tracker.example/pixel.png", "https://"] {
++            let parsed = MarkdownParser.parse(#"<p><img src="\#(src)" alt="x"></p>"#)
++            let html = try #require(parsed.root.children.first?.safeHTML, "\(src)")
++            #expect(html.isSafe, "\(src)")
++            #expect(html.annotations.contains { $0.kind == .inert }, "\(src)")
++        }
++    }
++
++    @Test func presentationalAttributesAreDroppedNotRejected() throws {
++        let source = #"<p align="center" class="hero"><a href="https://downright.cc/" target="_blank" rel="noopener"><img src="Resources/AppIcon.png" width="128" height=128 style="border:0" alt="icon"></a></p>"#
++        let parsed = MarkdownParser.parse(source)
++        let html = try #require(parsed.root.children.first?.safeHTML)
++        #expect(html.isSafe)
++        #expect(html.annotations.contains { $0.kind == .image(source: "Resources/AppIcon.png", alt: "icon") })
++        #expect(html.annotations.contains { $0.kind == .paragraph(align: .center) })
++    }
++
++    @Test func handlersAndUnknownAttributesStillRejectTheBlock() throws {
++        for source in [
++            #"<p><img src="a.png" width=10 onerror="alert(1)"></p>"#,
++            #"<p><img src="a.png" data-track="1"></p>"#,
++            #"<p><a href=javascript:alert(1)>x</a></p>"#,
++            #"<p><img src="a.png" width=1"0></p>"#,
++        ] {
++            let parsed = MarkdownParser.parse(source)
++            let html = parsed.root.children.first?.safeHTML
++            #expect(html?.isSafe != true, "\(source)")
++        }
+     }
+ 
+     @Test func githubProfileContinuesToDescribeRawHTMLAsTargetCompatibility() {
+@@ -170,7 +203,7 @@ struct SafeHTMLTests {
+         }
+         #expect(!documents.isEmpty)
+         #expect(documents.contains { html in
+-            html.annotations.contains { if case .inert = $0.kind { true } else { false } }
++            html.annotations.contains { if case .remoteImage = $0.kind { true } else { false } }
+         })
+         #expect(parsed.text == readme)
+     }
+diff --git a/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift b/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
+index 714ef74..e00ce1b 100644
+--- a/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
++++ b/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
+@@ -71,6 +71,26 @@ struct SafeHTMLRenderTests {
+         #expect(storage.string == source)
+     }
+ 
++    @Test func remoteHTMLImageStaysInertUnlessTheHostLoadsRemoteImages() throws {
++        let source = #"<p align="center"><img src="https://img.example/badge.svg" alt="badge"></p>"#
++        let document = MarkdownParser.parse(source)
++        let image = (source as NSString).range(of: "<img")
++
++        // The Mac's configuration: no fragment, faint source, nothing fetched.
++        let inert = NSTextStorage(string: source)
++        engine(.read).decorate(inert, document: document, dirty: .wholesale)
++        #expect(inert.attribute(.drFragment, at: image.location, effectiveRange: nil) == nil)
++
++        let opted = NSTextStorage(string: source)
++        let renderer = engine(.read)
++        renderer.loadsRemoteImages = true
++        renderer.decorate(opted, document: document, dirty: .wholesale)
++        let payload = try #require(opted.attribute(.drFragment, at: image.location, effectiveRange: nil) as? FragmentPayload)
++        #expect(payload.kind == .image)
++        #expect(payload.detail == "https://img.example/badge.svg")
++        #expect(opted.string == source)
++    }
++
+     @Test func detailsAndTableAnnotationsReceiveNativeReadingChrome() throws {
+         let source = "<details open><summary>More</summary>Body</details>\n<table><tr><td>A</td><td>B</td></tr></table>"
+         let document = MarkdownParser.parse(source)

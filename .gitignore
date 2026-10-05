@@ -1,0 +1,7 @@
+# Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+# Assembled trees and verification output.
+/work/
+/work-*/
+/verify-*.log
+# Your own Apple team ID and bundle prefix; assemble.sh copies it into work/.
+/Signing.local.xcconfig

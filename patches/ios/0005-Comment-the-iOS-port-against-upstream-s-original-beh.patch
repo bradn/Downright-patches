@@ -1,0 +1,212 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 09:03:36 -0400
+Subject: [PATCH 5/6] Comment the iOS port against upstream's original
+ behaviour
+
+Records the findings the port relies on where the code uses them: why
+inline images never drew upstream (fragments are found only at paragraph
+start), what SafeHTML rejected before and that the attribute leniency
+applies to the Mac too, that remote HTML images were .inert, where the
+Mac view's map-building and code-copy bodies moved, how UIImage sizing
+and alpha detection differ from NSImage, how AppKit semantic colours and
+accessibility flags map to UIKit, and which targets build for iOS.
+Comments only.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ Package.swift                                         |  5 +++++
+ Sources/MarkdownCore/SafeHTML.swift                   | 11 ++++++++++-
+ Sources/MarkdownRender/Engine/DecorationEngine.swift  |  2 ++
+ .../MarkdownRender/Fragments/BoundedImageCache.swift  |  6 ++++++
+ .../MarkdownRender/Fragments/CodeBlockFragment.swift  |  2 ++
+ Sources/MarkdownRender/Fragments/FragmentBase.swift   |  3 +++
+ Sources/MarkdownRender/RenderContracts.swift          |  6 +++++-
+ Sources/MarkdownRender/Theme/StyleSheet.swift         |  6 ++++++
+ Sources/MarkdownRender/View/MarkdownTextView.swift    |  8 +++++++-
+ 9 files changed, 46 insertions(+), 3 deletions(-)
+
+diff --git a/Package.swift b/Package.swift
+index 2b6d8bd..3492f54 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -54,6 +54,11 @@ let testLinkerSettings: [LinkerSetting] = needsCLTTestPaths
+ 
+ let package = Package(
+     name: "Downright",
++    // iOS added by the iOS port (IOS-PORT-PLAN.md).  Only MarkdownCore and
++    // MarkdownRender are built for it (Scripts/check-ios.sh); MarkdownRender's
++    // AppKit view files compile out with `#if os(macOS)`.  The app, Quick Look,
++    // thumbnail, Spotlight and CLI targets stay Mac-only and are never built
++    // for iOS.
+     platforms: [.macOS(.v14), .iOS(.v17)],
+     products: [
+         .library(name: "MarkdownCore", targets: ["MarkdownCore"]),
+diff --git a/Sources/MarkdownCore/SafeHTML.swift b/Sources/MarkdownCore/SafeHTML.swift
+index e1ebd4c..e92878e 100644
+--- a/Sources/MarkdownCore/SafeHTML.swift
++++ b/Sources/MarkdownCore/SafeHTML.swift
+@@ -13,7 +13,9 @@ public enum SafeHTMLKind: Sendable, Equatable {
+     case image(source: String, alt: String)
+     /// An `https:` image.  The parser never fetches it; a renderer shows it
+     /// only when its host has opted in to remote images, and otherwise treats
+-    /// it exactly like `inert`.
++    /// it exactly like `inert`.  Upstream classified these as `.inert`
++    /// directly; the separate case lets the iOS reader opt in while the Mac's
++    /// rendering of them stays byte-for-byte the same.
+     case remoteImage(source: String, alt: String)
+     /// A recognized but deliberately non-rendered tag, such as an image with
+     /// an unsupported source.  Its source remains visible and no network or
+@@ -364,6 +366,13 @@ public enum SafeHTMLParser {
+     /// reader has no use for them, so they are dropped instead of rejecting
+     /// the whole block.  Anything else unknown, and every `on…` handler, still
+     /// rejects it.
++    ///
++    /// Upstream rejected a block on *any* attribute outside the small allowed
++    /// set, and on any unquoted value.  Downright's own README opens with
++    /// `<img … width="128">`, so its header block fell back to raw source on
++    /// both platforms.  This change applies on the Mac too: it is a parser
++    /// change, and it only turns source text into the same native rendering
++    /// an attribute-free block already got.
+     private static let ignoredAttributes: Set<String> = [
+         "width", "height", "align", "valign", "border", "hspace", "vspace",
+         "class", "id", "style", "dir", "lang", "target", "rel",
+diff --git a/Sources/MarkdownRender/Engine/DecorationEngine.swift b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+index 2befc8c..313b093 100644
+--- a/Sources/MarkdownRender/Engine/DecorationEngine.swift
++++ b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+@@ -1011,6 +1011,8 @@ public final class DecorationEngine {
+                 if loadsRemoteImages {
+                     applyHTMLImage(source: source, alt: alt, annotation: annotation, block: block, state: &state)
+                 } else {
++                    // Exactly upstream's `.inert` treatment (below), which is
++                    // what a remote image was classified as before.
+                     apply([.foregroundColor: styleSheet.textFaint],
+                           to: annotation.range, state: &state)
+                 }
+diff --git a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+index b21e20d..dd64473 100644
+--- a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
++++ b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+@@ -299,6 +299,12 @@ final class ImageRenderCache {
+         // handed back in a format that no longer advertises it.  Fragments
+         // matte a transparent image rather than letting the page colour show
+         // through the artwork, so the flag has to survive the downsample.
++        //
++        // On iOS there is no representation to carry the flag:
++        // `platformImageHasAlpha` reads the thumbnail's own `alphaInfo`
++        // instead, so a source that declared alpha but was handed back opaque
++        // gets no matte there.  The size passed above also behaves differently
++        // on iOS; see `UIImage(cgImage:size:)` in Platform.swift.
+         #if os(macOS)
+         if let declared = properties?[kCGImagePropertyHasAlpha] as? Bool {
+             image.representations.first?.hasAlpha = declared
+diff --git a/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift b/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
+index c4d16af..3527ecf 100644
+--- a/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
++++ b/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
+@@ -264,6 +264,8 @@ final class CodeBlockFragment: DownrightFragment {
+     static let copyControlSide: CGFloat = 28
+ 
+     /// The code a copy puts on the pasteboard: the block without its fences.
++    /// Moved verbatim from `MarkdownTextView+Interaction` (iOS port) so the
++    /// Mac view and the UIKit reader copy exactly the same text.
+     static func codeText(of payload: FragmentPayload, in storage: NSTextStorage) -> String {
+         var range = payload.sourceRange
+         range.location = max(0, range.location)
+diff --git a/Sources/MarkdownRender/Fragments/FragmentBase.swift b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+index aa6859a..d3f7376 100644
+--- a/Sources/MarkdownRender/Fragments/FragmentBase.swift
++++ b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+@@ -627,6 +627,9 @@ func drawNSImage(_ image: PlatformImage, in target: CGRect, in cg: CGContext, co
+     let drawingContext = NSGraphicsContext(cgContext: cg, flipped: true)
+     guard let cgImage = image.cgImage(forProposedRect: &proposed, context: drawingContext, hints: nil) else { return }
+     #else
++    // A UIImage always holds a bitmap: the drawing-handler shim renders once
++    // up front at the screen's scale (Platform.swift), so there is no
++    // per-display rasterization step to choose a scale for.
+     _ = proposed
+     guard let cgImage = image.cgImage else { return }
+     #endif
+diff --git a/Sources/MarkdownRender/RenderContracts.swift b/Sources/MarkdownRender/RenderContracts.swift
+index 9470c7d..783894e 100644
+--- a/Sources/MarkdownRender/RenderContracts.swift
++++ b/Sources/MarkdownRender/RenderContracts.swift
+@@ -511,7 +511,11 @@ extension PlatformColor {
+ 
+     static func systemColorNamed(_ name: String) -> PlatformColor? {
+         #if !os(macOS)
+-        // UIKit names for the AppKit semantic colours themes may reference.
++        // Themes name AppKit semantic colours ("system:labelColor"); upstream
++        // resolved them to the AppKit classes below.  UIKit has a counterpart
++        // for each, but not always an exact one: text, control and under-page
++        // backgrounds map to the nearest system/grouped backgrounds, the
++        // accent to the tint colour, and selection to the tint at 30%.
+         switch name {
+         case "label", "labelColor": return .label
+         case "secondaryLabel", "secondaryLabelColor": return .secondaryLabel
+diff --git a/Sources/MarkdownRender/Theme/StyleSheet.swift b/Sources/MarkdownRender/Theme/StyleSheet.swift
+index e0e2a19..0ec5829 100644
+--- a/Sources/MarkdownRender/Theme/StyleSheet.swift
++++ b/Sources/MarkdownRender/Theme/StyleSheet.swift
+@@ -129,6 +129,8 @@ public struct StyleSheet {
+         increaseContrast = workspace.accessibilityDisplayShouldIncreaseContrast
+         reduceTransparency = workspace.accessibilityDisplayShouldReduceTransparency
+         #else
++        // UIKit's equivalents of the three NSWorkspace display options.
++        // "Increase Contrast" is called Darker System Colors in UIKit's API.
+         reduceMotion = reduceMotionOverride ?? UIAccessibility.isReduceMotionEnabled
+         increaseContrast = UIAccessibility.isDarkerSystemColorsEnabled
+         reduceTransparency = UIAccessibility.isReduceTransparencyEnabled
+@@ -313,6 +315,8 @@ public struct StyleSheet {
+             [.typeIdentifier: Int(kContextualAlternatesType), .selectorIdentifier: Int(kContextualAlternatesOffSelector)],
+         ]
+         #else
++        // The same Core Text feature selectors; UIFontDescriptor only spells
++        // the dictionary keys differently (`.type`/`.selector`).
+         let settings: [[PlatformFontDescriptor.FeatureKey: Int]] = [
+             [.type: Int(kLigaturesType), .selector: Int(kCommonLigaturesOffSelector)],
+             [.type: Int(kLigaturesType), .selector: Int(kRareLigaturesOffSelector)],
+@@ -596,6 +600,8 @@ struct ColorResolver {
+     }
+ }
+ 
++/// Moved here from `View/StyleSheetDefaults.swift` (iOS port): shared
++/// fragments use it, and the `View/` folder is AppKit-only.
+ extension PlatformColor {
+     /// Alpha that respects Increase Contrast (§11.4): a 12% tick that reads as
+     /// a hint at normal contrast has to become visible, not stay decorative.
+diff --git a/Sources/MarkdownRender/View/MarkdownTextView.swift b/Sources/MarkdownRender/View/MarkdownTextView.swift
+index 4947fa2..e6a23cb 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextView.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextView.swift
+@@ -1374,6 +1374,10 @@ public final class MarkdownTextView: NSTextView {
+         baseLayoutMap = layoutDisplayMap(from: baseDisplayMap)
+     }
+ 
++    /// The map-building body that used to live here moved verbatim to
++    /// `PresentationMaps.base` (iOS port) so the UIKit reader builds the same
++    /// maps; the Mac passes no inline-image context and no HTML join, so its
++    /// output is unchanged.
+     private func rebuildBaseDisplayMap(document: ParsedDocument) {
+         let maps = PresentationMaps.base(
+             document: document,
+@@ -1397,7 +1401,8 @@ public final class MarkdownTextView: NSTextView {
+     }
+ 
+     /// TextKit 2 elements keep source-length ranges even when Markdown syntax
+-    /// is visually omitted; see `LayoutMapBuilder`.
++    /// is visually omitted; see `LayoutMapBuilder` (moved verbatim from this
++    /// file to `PresentationMaps.swift` so the iOS reader shares it).
+     private func layoutDisplayMap(from logical: DisplayMap) -> DisplayMap {
+         layoutMapBuilder.layoutDisplayMap(from: logical, paragraphs: paragraphIndex, storage: textStorage)
+     }
+@@ -1916,6 +1921,7 @@ public final class MarkdownTextView: NSTextView {
+     private func applyHiddenAttribute(_ hidden: [NSRange], scope: NSRange?, excluding: [NSRange] = []) {
+         guard let storage = textStorage, storage.length > 0 else { return }
+         let window = scope.flatMap { clampToStorage($0) } ?? NSRange(location: 0, length: storage.length)
++        // Body moved verbatim to `PresentationMaps` (shared with iOS).
+         PresentationMaps.applyHiddenAttribute(hidden, to: storage, scope: window, excluding: excluding)
+     }
+ 

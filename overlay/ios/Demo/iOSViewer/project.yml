@@ -1,0 +1,40 @@
+# Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+# Throwaway iOS demo: shows the shared MarkdownRender engine's styled text in a
+# plain UITextView. Not the phase 2 reading surface; see IOS-PORT-PLAN.md.
+#   xcodegen generate   (in this directory)
+name: DownrightViewerDemo
+options:
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  Downright:
+    path: ../..
+targets:
+  DownrightViewerDemo:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+      - path: Resources
+        buildPhase: resources
+      - path: ../../README.md
+        buildPhase: resources
+    dependencies:
+      - package: Downright
+        product: MarkdownCore
+      - package: Downright
+        product: MarkdownRender
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ezzy.downright.demo.viewer
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_CFBundleDisplayName: Downright Demo
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic

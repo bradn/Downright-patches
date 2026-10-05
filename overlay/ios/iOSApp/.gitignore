@@ -1,0 +1,5 @@
+# Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+DownrightIOS.xcodeproj/
+Generated/
+# Your own team ID and bundle prefix; see Signing.xcconfig.
+Signing.local.xcconfig

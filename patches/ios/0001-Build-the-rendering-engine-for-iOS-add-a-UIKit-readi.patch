@@ -1,0 +1,3029 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Sun, 4 Oct 2026 18:57:41 -0400
+Subject: [PATCH 1/6] Build the rendering engine for iOS; add a UIKit reading
+ surface
+
+Phase 1 and 2 of IOS-PORT-PLAN.md.
+
+- Package.swift declares iOS 17. MarkdownRender's engine, fragments and
+  themes name platform types through Platform/Platform.swift (the AppKit
+  classes on macOS); the AppKit view layer compiles out on iOS.
+- UIKitView/MarkdownReaderView: a read-only UITextView on TextKit 2 built
+  from the same content storage, display map, decoration engine and
+  fragments as MarkdownTextView, with outline, rotors, links, footnotes,
+  code copy, find support and its own scroll height.
+- Shared with the Mac view: Engine/PresentationMaps (moved verbatim out of
+  MarkdownTextView), CodeBlockFragment.codeText, FragmentBase.columnOrigin.
+- Mac-visible fix: replayed decoration programs now style whole
+  paragraphs, so list items keep their spacing after re-decoration
+  (DecorationReplayTests).
+- Scripts/check-ios.sh builds for iOS devices and runs MarkdownCore and
+  MarkdownRender tests on a simulator, then the iOS app's tests.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ AGENTS.md                                     |   3 +-
+ Docs/ARCHITECTURE.md                          |  41 ++-
+ Package.swift                                 |   2 +-
+ .../MarkdownRender/Engine/BlockStyle.swift    |  10 +-
+ .../Engine/DecorationEngine.swift             |  33 ++-
+ .../MarkdownRender/Engine/RenderMetrics.swift |  11 +
+ .../Fragments/BoundedImageCache.swift         |  37 ++-
+ .../Fragments/CalloutFragment.swift           |  14 +-
+ .../Fragments/CodeBlockFragment.swift         |  62 +++-
+ .../Fragments/FootnoteReferenceDisplay.swift  |   4 +
+ .../Fragments/FragmentBase.swift              |  82 ++++--
+ .../Fragments/FrontMatterFragment.swift       |  63 ++--
+ .../Fragments/ImageFragment.swift             |  37 ++-
+ .../Fragments/InlineCodePill.swift            |   4 +
+ .../Fragments/InlineMathDisplay.swift         |   8 +-
+ .../Fragments/ListOrnamentFragment.swift      |  14 +-
+ .../Fragments/MathFragment.swift              |  11 +-
+ .../Fragments/MathRenderer.swift              |  25 +-
+ .../Fragments/MermaidFragment.swift           |   7 +-
+ .../Fragments/MermaidRendererBridge.swift     |  23 +-
+ .../Fragments/TableFragment.swift             |  26 +-
+ .../Fragments/ThematicBreakFragment.swift     |   5 +
+ Sources/MarkdownRender/Motion.swift           |   2 +
+ Sources/MarkdownRender/RenderContracts.swift  |  35 ++-
+ .../Theme/PreviewAppearance.swift             |   2 +
+ Sources/MarkdownRender/Theme/StyleSheet.swift | 176 ++++++-----
+ Sources/MarkdownRender/Theme/ThemeStore.swift |   4 +
+ .../Theme/ThemeValidation.swift               |  20 +-
+ .../Theme/VSCodeThemeImport.swift             |   4 +
+ .../View/DensityGutterPreviewWindow.swift     |   2 +
+ .../View/DensityGutterView.swift              |   2 +
+ .../View/DensityOutlineWindow.swift           |   2 +
+ .../View/FootnoteMarginView.swift             |   2 +
+ .../View/FragmentProvider.swift               |   4 +
+ .../MarkdownRender/View/GutterRailView.swift  |   2 +
+ .../View/MarkdownContainerView.swift          |   2 +
+ .../View/MarkdownContentStorage.swift         |   4 +
+ .../View/MarkdownSmartPaste.swift             |   2 +
+ .../View/MarkdownTextView+Interaction.swift   |  22 +-
+ .../View/MarkdownTextView.swift               | 274 ++----------------
+ .../View/MarkdownTextViewDelegate.swift       |   2 +
+ .../View/ParagraphSubstitution.swift          |   4 +
+ .../View/StyleSheetDefaults.swift             |  10 +-
+ .../MarkdownRender/View/TrackingArea.swift    |   2 +
+ Sources/MarkdownRender/_bootstrap.swift       |   4 +
+ .../BoundedImageCacheTests.swift              |  11 +
+ .../CalloutGeometryTests.swift                |   3 +
+ .../ClickStabilityTests.swift                 |   3 +
+ .../ClipboardSemanticHTMLTests.swift          |   3 +
+ .../CodeBlockGeometryTests.swift              |   3 +
+ .../ContentResizeTests.swift                  |   3 +
+ .../ContentStorageTilingTests.swift           |   4 +
+ .../MarkdownRenderTests/DecorationTests.swift |   3 +
+ .../DensityRailTests.swift                    |   3 +
+ .../DropAndQuickLookTests.swift               |   3 +
+ .../GeometryProbeTests.swift                  |   6 +-
+ .../LayoutFillerTests.swift                   |   3 +
+ .../ListOrnamentTests.swift                   |   3 +
+ .../MermaidOrientationProbeTests.swift        |   7 +
+ .../MotionSystemTests.swift                   |   3 +
+ .../ReflowAndRhythmTests.swift                |   3 +
+ .../SafeHTMLLineBreakTests.swift              |   3 +
+ .../SafeHTMLRenderTests.swift                 |   4 +
+ .../SmartPasteIntegrationTests.swift          |   3 +
+ .../MarkdownRenderTests/SmartPasteTests.swift |   3 +
+ .../SpeechAccessibilityTests.swift            |   3 +
+ Tests/MarkdownRenderTests/ThemeTests.swift    |   6 +-
+ .../TypingInvalidationTests.swift             |   3 +
+ 68 files changed, 707 insertions(+), 487 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index b8adba6..2fe160d 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -32,7 +32,8 @@ This file contains Downright-specific context, invariants, and evidence gates. F
+ ## Validation by Surface
+ 
+ - For code changes, use focused tests while iterating, then run `Scripts/check.sh` as the authoritative source gate. For documentation-only changes, inspect content, links, and referenced commands without rebuilding the app. Do not substitute bare `swift test`; zero executed tests or a masked pipeline failure is a failed gate.
+-- Give concurrent checks unique scratch/build locations using the supported variables: `SCRATCH`, `TEST_SCRATCH`, `APP_ACCEPTANCE_SCRATCH`, and `SPOTLIGHT_SCRATCH`. Release benchmarks default to `${SCRATCH}-bench`; `BENCH_SCRATCH` can override that location. If source, `HEAD`, or relevant outputs change during validation, discard the result and rerun on the intended snapshot.
++- When a change touches `MarkdownCore` or the shared (non-`View/`) half of `MarkdownRender`, also run `Scripts/check-ios.sh`. It requires Xcode and builds for iOS devices and the simulator. It also generates and tests the read-only iOS app in `iOSApp/` when XcodeGen is installed. It does not replace `Scripts/check.sh`. The iOS app is not a release surface: nothing in `Docs/RELEASE.md` covers it. Shared code names platform types through `MarkdownRender/Platform/Platform.swift`, not `NSColor`/`NSFont`/`NSImage` directly.
++- Give concurrent checks unique scratch/build locations using the supported variables: `SCRATCH`, `TEST_SCRATCH`, `APP_ACCEPTANCE_SCRATCH`, `SPOTLIGHT_SCRATCH`, and `IOS_SCRATCH` (for `Scripts/check-ios.sh`). Release benchmarks default to `${SCRATCH}-bench`; `BENCH_SCRATCH` can override that location. If source, `HEAD`, or relevant outputs change during validation, discard the result and rerun on the intended snapshot.
+ - `Scripts/bundle-app.sh` is appropriate for host-only iteration but does not prove Finder extensions. Use `Scripts/bundle-xcode-app.sh` and `Scripts/check-app.sh` for Quick Look, thumbnails, Finder integration, or production-shaped app acceptance. Development/ad-hoc bundles do not prove production Sparkle behavior. Every nested Mach-O must support all architectures of its host; universal release archives must include Intel and Apple Silicon CLI and Spotlight binaries.
+ - When the installed app is the acceptance surface, install the intended artifact explicitly with `APP_SOURCE=... Scripts/install.sh`, stop stale Downright instances when safe, and verify bundle path, version/build, executable identity, signature, embedded components, and running process before exercising the feature.
+ - Use a disposable document copy for destructive editing, Replace All, task toggles, metadata, save/discard, or conflict QA. Restore task-created preferences/state afterward.
+diff --git a/Docs/ARCHITECTURE.md b/Docs/ARCHITECTURE.md
+index 38d77ac..7df7a0f 100644
+--- a/Docs/ARCHITECTURE.md
++++ b/Docs/ARCHITECTURE.md
+@@ -25,7 +25,41 @@ Sources/
+   down/             terminal launcher
+ ```
+ 
+-`MarkdownCore` has no UI dependency. `MarkdownRender` owns AppKit rendering.
++`MarkdownCore` has no UI dependency. `MarkdownRender` owns rendering, in two
++halves:
++
++- **Shared engine:** the engine, fragments, themes, syntax and TextKit 2
++  content storage build for macOS and iOS. They name colours, fonts, images
++  and appearances through the aliases in `MarkdownRender/Platform/Platform.swift`
++  (`PlatformColor`, `PlatformFont`, `PlatformImage`, `PlatformAppearance`).
++  On macOS each alias is the AppKit type, so the Mac build is unchanged. Where
++  the two SDKs differ, shared code uses `#if os(macOS)` or a helper in that
++  file. On iOS the file also adds the few AppKit-only methods the shared code
++  calls.
++- **View layer:** `View/` and `Motion.swift` are AppKit-only and compile out
++  on iOS. The exceptions are `MarkdownContentStorage`, `ParagraphSubstitution`
++  and `FragmentProvider`, which are shared.
++- **iOS reading surface:** `UIKitView/MarkdownReaderView` is a read-only
++  `UITextView` on TextKit 2. It builds the same surface from the same shared
++  pieces as `MarkdownTextView`:
++  - content storage and paragraph substitution;
++  - `DecorationEngine`;
++  - `Engine/PresentationMaps` (the read-mode display map, shared with the Mac
++    view);
++  - `FragmentProvider` and the fragments.
++  It has no editing, caret reveal or folding.
++  - Links route through `UITextViewDelegate` to `linkHandler`.
++  - Navigation (the outline, `ReaderOutlineController`, and the VoiceOver
++    heading and link rotors) is in `MarkdownReaderView+Navigation`.
++  - It sets its own scroll content height, as the Mac view sets its frame.
++  See `IOS-PORT-PLAN.md`.
++- **iOS app:** `iOSApp/` (its own XcodeGen spec, outside the Mac project) is
++  a read-only document-browser app.
++  - It decodes with `DocumentIO` and never writes: `MarkdownDocument`
++    refuses to produce contents.
++  - It reloads on coordinated outside edits and follows renames.
++  - It keeps the last text, with a notice, when the file is deleted.
++
+ The app owns windows, file access, and user actions. Quick Look uses the same
+ core and render contracts as the app. The Spotlight targets share only the
+ parser-backed metadata contract and never start an AppKit surface.
+@@ -151,4 +185,7 @@ zoom, folding, find, tasks, paths, Quick Look limits, and accessibility.
+ 
+ Performance gates are defined in [PERFORMANCE.md](PERFORMANCE.md). The
+ implementation must pass `Scripts/check.sh` and the release benchmark before a
+-phase is complete.
++phase is complete. Changes to `MarkdownCore` or the shared half of
++`MarkdownRender` must also pass `Scripts/check-ios.sh`. It builds the renderer
++for iOS devices and runs `MarkdownCoreTests` and `MarkdownRenderTests` on an iOS
++simulator. Render tests that drive the AppKit view layer compile out there.
+diff --git a/Package.swift b/Package.swift
+index b57f7cb..2b6d8bd 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -54,7 +54,7 @@ let testLinkerSettings: [LinkerSetting] = needsCLTTestPaths
+ 
+ let package = Package(
+     name: "Downright",
+-    platforms: [.macOS(.v14)],
++    platforms: [.macOS(.v14), .iOS(.v17)],
+     products: [
+         .library(name: "MarkdownCore", targets: ["MarkdownCore"]),
+         .library(name: "MarkdownRender", targets: ["MarkdownRender"]),
+diff --git a/Sources/MarkdownRender/Engine/BlockStyle.swift b/Sources/MarkdownRender/Engine/BlockStyle.swift
+index 5ed3996..d6d9e0b 100644
+--- a/Sources/MarkdownRender/Engine/BlockStyle.swift
++++ b/Sources/MarkdownRender/Engine/BlockStyle.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Where a block sits in the tree.  `MDBlock` has no parent pointer (it is a
+@@ -218,7 +222,7 @@ final class BlockStyleFactory {
+         )
+     }
+ 
+-    func font(for content: BlockContent) -> NSFont {
++    func font(for content: BlockContent) -> PlatformFont {
+         switch content {
+         case .heading(let level): return styleSheet.headingFont(level: level)
+         case .codeBlock, .mermaid, .mathBlock: return styleSheet.monoFont()
+@@ -227,7 +231,7 @@ final class BlockStyleFactory {
+         }
+     }
+ 
+-    private func color(for content: BlockContent, context: BlockContext) -> NSColor {
++    private func color(for content: BlockContent, context: BlockContext) -> PlatformColor {
+         switch content {
+         case .heading(let level): return styleSheet.headingColor(level: level)
+         case .blockQuote: return styleSheet.text
+@@ -466,7 +470,7 @@ final class BlockStyleFactory {
+             return max(bodySize * 1.1, bodySize * 0.625 + gap)
+         }
+         let digits = max(1, String(abs(ordinal)).count)
+-        let font = NSFont.monospacedDigitSystemFont(ofSize: bodySize * 0.92, weight: .regular)
++        let font = PlatformFont.monospacedDigitSystemFont(ofSize: bodySize * 0.92, weight: .regular)
+         let marker = NSAttributedString(
+             string: String(repeating: "8", count: digits) + ".",
+             attributes: [.font: font]
+diff --git a/Sources/MarkdownRender/Engine/DecorationEngine.swift b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+index f66711d..a3f53a3 100644
+--- a/Sources/MarkdownRender/Engine/DecorationEngine.swift
++++ b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// What one `decorate` call did.  Counts rather than ranges: the engine is on
+@@ -456,7 +460,7 @@ public final class DecorationEngine {
+                 let found = source.range(of: title, options: [], range: searchRange)
+                 if found.location != NSNotFound {
+                     apply([
+-                        .font: NSFont.systemFont(ofSize: styleSheet.bodyFont().pointSize, weight: .semibold),
++                        .font: PlatformFont.systemFont(ofSize: styleSheet.bodyFont().pointSize, weight: .semibold),
+                         .foregroundColor: styleSheet.calloutColor(kind),
+                     ], to: NSRange(location: block.range.location + found.location, length: found.length), state: &state)
+                 }
+@@ -812,7 +816,7 @@ public final class DecorationEngine {
+     private func applyInlines(
+         _ spans: [InlineSpan],
+         context: BlockContext,
+-        blockFont: NSFont,
++        blockFont: PlatformFont,
+         bold: Bool,
+         italic: Bool,
+         state: inout DecorateState
+@@ -1064,7 +1068,7 @@ public final class DecorationEngine {
+     /// Bold and italic inside a heading must stay at the heading's size, so
+     /// traits are derived from the block's own font unless the block is at body
+     /// size — where the theme's `emphasisFont` gets to make the call (§11.1).
+-    private func emphasized(_ base: NSFont, bold: Bool, italic: Bool) -> NSFont {
++    private func emphasized(_ base: PlatformFont, bold: Bool, italic: Bool) -> PlatformFont {
+         guard bold || italic else { return base }
+         if abs(base.pointSize - styleSheet.bodyFont().pointSize) < 0.5 {
+             return styleSheet.emphasisFont(bold: bold, italic: italic)
+@@ -1072,8 +1076,12 @@ public final class DecorationEngine {
+         var traits = base.fontDescriptor.symbolicTraits
+         if bold { traits.insert(.bold) }
+         if italic { traits.insert(.italic) }
++        #if os(macOS)
+         let descriptor = base.fontDescriptor.withSymbolicTraits(traits)
+-        return NSFont(descriptor: descriptor, size: base.pointSize) ?? base
++        #else
++        guard let descriptor = base.fontDescriptor.withSymbolicTraits(traits) else { return base }
++        #endif
++        return platformFont(descriptor: descriptor, size: base.pointSize) ?? base
+     }
+ 
+     // MARK: - Code blocks (§11.3)
+@@ -1231,8 +1239,23 @@ public final class DecorationEngine {
+     }
+ 
+     private func applyProgram(_ program: [AttributeOp], at origin: Int, state: inout DecorateState) {
++        let text = state.storage.string as NSString
+         for op in program {
+-            apply(op.attributes, to: shift(op.range, by: origin), state: &state)
++            let range = shift(op.range, by: origin)
++            guard let style = op.attributes[.paragraphStyle], range.upperBound <= text.length else {
++                apply(op.attributes, to: range, state: &state)
++                continue
++            }
++            var rest = op.attributes
++            rest.removeValue(forKey: .paragraphStyle)
++            if !rest.isEmpty { apply(rest, to: range, state: &state) }
++            // A program is recorded over the bare block, but the live path
++            // (`applyOwnParagraphStyle`) styles each whole paragraph the block
++            // starts in, from its first character.  For a list item's text that
++            // character is the marker before the block; replaying over the
++            // block alone let paragraph fixup take the marker's style instead,
++            // so a list lost its item spacing on every re-decoration.
++            apply([.paragraphStyle: style], to: text.paragraphRange(for: range), state: &state)
+         }
+     }
+ 
+diff --git a/Sources/MarkdownRender/Engine/RenderMetrics.swift b/Sources/MarkdownRender/Engine/RenderMetrics.swift
+index 651253e..591b5ea 100644
+--- a/Sources/MarkdownRender/Engine/RenderMetrics.swift
++++ b/Sources/MarkdownRender/Engine/RenderMetrics.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ 
+ /// Geometry constants shared by the engine, the fragments, and the view.
+ ///
+@@ -48,7 +52,14 @@ public enum RenderMetrics {
+     /// the window would make every resize a full re-decoration and blow the
+     /// §12 budget on a drag.  A narrow window shrinks the whole column instead,
+     /// which narrows prose with it — which is what a narrow window should do.
++    #if os(macOS)
+     public static let codeBleed: CGFloat = 88
++    #else
++    /// No lane on iOS: a phone has no margin to spill into, and a lane wide
++    /// enough to matter would cost a quarter of the prose width.  Code, tables
++    /// and diagrams share the prose column and scroll or wrap within it.
++    public static let codeBleed: CGFloat = 0
++    #endif
+ 
+     /// Narrowest prose column worth laying out.  The column floor is this plus
+     /// the bleed lane, so prose never collapses to keep the code lane alive.
+diff --git a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+index c7b4b68..b21e20d 100644
+--- a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
++++ b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import ImageIO
+ 
+ /// Small, cost-bounded image cache for rendered fragments.
+@@ -9,7 +13,7 @@ import ImageIO
+ /// for the budget is returned to the caller but never retained.
+ final class BoundedImageCache<Key: Hashable> {
+     private struct Entry {
+-        var image: NSImage?
++        var image: PlatformImage?
+         var cost: Int
+         var stamp: UInt64
+     }
+@@ -26,7 +30,7 @@ final class BoundedImageCache<Key: Hashable> {
+         self.totalCostLimit = max(1, totalCostLimit)
+     }
+ 
+-    func image(for key: Key, keyCost: Int = 0, create: () -> NSImage?) -> NSImage? {
++    func image(for key: Key, keyCost: Int = 0, create: () -> PlatformImage?) -> PlatformImage? {
+         lock.lock()
+         if var hit = entries[key] {
+             stamp &+= 1
+@@ -62,7 +66,7 @@ final class BoundedImageCache<Key: Hashable> {
+     /// only ever see this: `image(for:keyCost:create:)` may perform I/O in
+     /// `create`, and doing that on the main thread is what stalled the app
+     /// when an uncached image scrolled into view.
+-    func cached(_ key: Key) -> NSImage? {
++    func cached(_ key: Key) -> PlatformImage? {
+         lock.lock()
+         defer { lock.unlock() }
+         guard var hit = entries[key] else { return nil }
+@@ -75,7 +79,7 @@ final class BoundedImageCache<Key: Hashable> {
+     /// Records a value produced off the main thread (e.g. a background
+     /// decode).  Mirrors the admission rules of `image(for:keyCost:create:)`:
+     /// a value too large for the budget is not retained.
+-    func store(_ image: NSImage, for key: Key, keyCost: Int = 0) {
++    func store(_ image: PlatformImage, for key: Key, keyCost: Int = 0) {
+         let cost = Self.cost(of: image) + max(1, keyCost)
+         guard cost <= totalCostLimit else { return }
+         lock.lock()
+@@ -110,11 +114,16 @@ final class BoundedImageCache<Key: Hashable> {
+         }
+     }
+ 
+-    private static func cost(of image: NSImage?) -> Int {
++    private static func cost(of image: PlatformImage?) -> Int {
+         guard let image else { return 1 }
++        #if os(macOS)
+         let pixels = image.representations.reduce(0) {
+             max($0, safeProduct($1.pixelsWide, $1.pixelsHigh))
+         }
++        #else
++        let pixels = image.cgImage.map { safeProduct($0.width, $0.height) }
++            ?? safeProduct(Int(image.size.width * image.scale), Int(image.size.height * image.scale))
++        #endif
+         return safeProduct(max(1, pixels), 4)
+     }
+ 
+@@ -185,7 +194,7 @@ final class ImageRenderCache {
+     /// so a page of repeated images (or a split view showing one document
+     /// twice) starts one decode instead of one per fragment.  Every caller's
+     /// completion fires when the shared decode lands.
+-    private var inFlight: [Key: [(@Sendable @MainActor (NSImage?) -> Void)]] = [:]
++    private var inFlight: [Key: [(@Sendable @MainActor (PlatformImage?) -> Void)]] = [:]
+     private let lock = NSLock()
+ 
+     private func key(for url: URL, maxPixelDimension: Int) -> Key {
+@@ -195,7 +204,7 @@ final class ImageRenderCache {
+     /// Pure cache lookup — never touches the filesystem, so it can never
+     /// stall layout or drawing.  This is the only image access the draw path
+     /// uses; a miss means "schedule an async load", never "read it now".
+-    func cachedImage(for url: URL, maxPixelDimension: Int) -> NSImage? {
++    func cachedImage(for url: URL, maxPixelDimension: Int) -> PlatformImage? {
+         cache.cached(key(for: url, maxPixelDimension: maxPixelDimension))
+     }
+ 
+@@ -206,7 +215,7 @@ final class ImageRenderCache {
+     func loadImageAsync(
+         for url: URL,
+         maxPixelDimension: Int,
+-        completion: @escaping @Sendable @MainActor (NSImage?) -> Void
++        completion: @escaping @Sendable @MainActor (PlatformImage?) -> Void
+     ) {
+         let key = key(for: url, maxPixelDimension: maxPixelDimension)
+         lock.lock()
+@@ -221,7 +230,7 @@ final class ImageRenderCache {
+ 
+         DispatchQueue.global(qos: .userInitiated).async {
+             let image = self.decodeIfNeeded(for: key)
+-            let callbacks: [(@Sendable @MainActor (NSImage?) -> Void)]
++            let callbacks: [(@Sendable @MainActor (PlatformImage?) -> Void)]
+             self.lock.lock()
+             callbacks = self.inFlight.removeValue(forKey: key) ?? []
+             self.lock.unlock()
+@@ -236,7 +245,7 @@ final class ImageRenderCache {
+     /// Runs on the background queue.  Re-decodes when the file is not cached
+     /// yet or changed on disk since it was cached; otherwise returns the
+     /// cached decode (re-decoding only if eviction dropped it).
+-    private func decodeIfNeeded(for key: Key) -> NSImage? {
++    private func decodeIfNeeded(for key: Key) -> PlatformImage? {
+         let url = key.url
+         let current = Self.freshness(of: url)
+         let cached = cache.cached(key)
+@@ -268,7 +277,7 @@ final class ImageRenderCache {
+         return Freshness(fileSize: values?.fileSize.map(Int64.init), modified: values?.contentModificationDate)
+     }
+ 
+-    private static func downsampledImage(at url: URL, maxPixelDimension: Int) -> NSImage? {
++    private static func downsampledImage(at url: URL, maxPixelDimension: Int) -> PlatformImage? {
+         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+         let sourceWidth = properties?[kCGImagePropertyPixelWidth] as? CGFloat
+@@ -282,17 +291,19 @@ final class ImageRenderCache {
+         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+             return nil
+         }
+-        let image = NSImage(
++        let image = PlatformImage(
+             cgImage: cgImage,
+-            size: NSSize(width: sourceWidth ?? CGFloat(cgImage.width),
++            size: CGSize(width: sourceWidth ?? CGFloat(cgImage.width),
+                          height: sourceHeight ?? CGFloat(cgImage.height)))
+         // The *source* is the authority on transparency: a thumbnail can be
+         // handed back in a format that no longer advertises it.  Fragments
+         // matte a transparent image rather than letting the page colour show
+         // through the artwork, so the flag has to survive the downsample.
++        #if os(macOS)
+         if let declared = properties?[kCGImagePropertyHasAlpha] as? Bool {
+             image.representations.first?.hasAlpha = declared
+         }
++        #endif
+         return image
+     }
+ }
+diff --git a/Sources/MarkdownRender/Fragments/CalloutFragment.swift b/Sources/MarkdownRender/Fragments/CalloutFragment.swift
+index acfe3c0..87e036a 100644
+--- a/Sources/MarkdownRender/Fragments/CalloutFragment.swift
++++ b/Sources/MarkdownRender/Fragments/CalloutFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Quotes and callouts (§11.3): a coloured left rule plus an SF Symbol icon,
+@@ -186,7 +190,7 @@ final class CalloutFragment: DownrightFragment {
+         band: CGRect,
+         reservedInset: CGFloat,
+         ruleWidth: CGFloat,
+-        color: NSColor,
++        color: PlatformColor,
+         at point: CGPoint,
+         style: StyleSheet,
+         in cg: CGContext
+@@ -195,10 +199,10 @@ final class CalloutFragment: DownrightFragment {
+         let rowHeight = textLineFragments.first.map { max(1, $0.typographicBounds.height) }
+             ?? style.lineHeight
+ 
+-        if let icon = NSImage(systemSymbolName: style.calloutSymbol(kind), accessibilityDescription: nil) {
++        if let icon = PlatformImage(systemSymbolName: style.calloutSymbol(kind), accessibilityDescription: nil) {
+             let configured = icon.withSymbolConfiguration(
+-                NSImage.SymbolConfiguration(pointSize: style.bodyFont().pointSize, weight: .medium)) ?? icon
+-            let tinted = NSImage(size: configured.size, flipped: false) { rect in
++                PlatformImage.SymbolConfiguration(pointSize: style.bodyFont().pointSize, weight: .medium)) ?? icon
++            let tinted = PlatformImage(size: configured.size, flipped: false) { rect in
+                 configured.draw(in: rect)
+                 color.set()
+                 rect.fill(using: .sourceAtop)
+@@ -216,7 +220,7 @@ final class CalloutFragment: DownrightFragment {
+         // An untitled callout is still a callout: it gets its kind's name, so
+         // `> [!NOTE]` reads as "Note" rather than as an empty tinted row.
+         let label = NSAttributedString(string: title.isEmpty ? Self.defaultLabel(kind) : title, attributes: [
+-            .font: NSFont.systemFont(ofSize: style.bodyFont().pointSize * 0.94, weight: .semibold),
++            .font: PlatformFont.systemFont(ofSize: style.bodyFont().pointSize * 0.94, weight: .semibold),
+             .foregroundColor: color,
+         ])
+         let labelHeight = min(rowHeight, ceil(label.size().height))
+diff --git a/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift b/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
+index e41d4c8..c4d16af 100644
+--- a/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
++++ b/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Fenced code (§11.3): a subtle tint plus a left rule, **never** a heavy
+@@ -160,7 +164,13 @@ final class CodeBlockFragment: DownrightFragment {
+     }
+ 
+     private func drawCopyControl(in band: CGRect, style: StyleSheet, language: String, in cg: CGContext) {
++        #if os(macOS)
+         guard context?.hoveredFragmentRange == payload.sourceRange else { return }
++        #else
++        // Touch has no hover, so on iOS the control is always shown — once, in
++        // the header row, where it has its full touch size.
++        guard role == .openChrome else { return }
++        #endif
+         let copy = Self.copyButtonRect(in: band, style: style, language: language)
+         let copied = context?.copiedCodeRange == payload.sourceRange
+         let bgColor = copied
+@@ -169,7 +179,7 @@ final class CodeBlockFragment: DownrightFragment {
+         cg.fillRect(copy, color: bgColor, radius: 6)
+         let symbol = copied ? "checkmark" : "doc.on.doc"
+         let description = copied ? "Copied" : "Copy code"
+-        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)?
++        if let image = PlatformImage(systemSymbolName: symbol, accessibilityDescription: description)?
+             .withSymbolConfiguration(.init(pointSize: 12, weight: copied ? .bold : .medium)) {
+             let iconColor = copied ? style.accent : style.textSecondary
+             let tinted = image.tinted(iconColor)
+@@ -190,7 +200,7 @@ final class CodeBlockFragment: DownrightFragment {
+             .foregroundColor: style.textSecondary,
+         ])
+         cg.drawText(attributed, in: chip.insetBy(dx: RenderMetrics.codeInsetX, dy: 6), flipped: true)
+-        if let triangle = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Expand code")?
++        if let triangle = PlatformImage(systemSymbolName: "chevron.right", accessibilityDescription: "Expand code")?
+             .withSymbolConfiguration(.init(pointSize: 9, weight: .semibold)) {
+             draw(image: triangle.tinted(style.textSecondary),
+                  in: CGRect(x: chip.minX + 7, y: chip.midY - 5, width: 10, height: 10), in: cg)
+@@ -211,7 +221,15 @@ final class CodeBlockFragment: DownrightFragment {
+         // paragraph fragment carries the other. Back both out, then restore
+         // only the block's structural indent. Otherwise top-level bands land
+         // 22pt right of prose and nested bands lose their list edge.
+-        return CGRect(x: point.x + indent - RenderMetrics.codeInsetX * 2,
++        #if os(macOS)
++        let surfaceCorrection = RenderMetrics.codeInsetX * 2
++        #else
++        // UITextView draws each fragment with `point` at the fragment's own
++        // frame origin, which TextKit insets by the paragraph indent.  Back
++        // that out to reach the column edge.
++        let surfaceCorrection = layoutFragmentFrame.minX
++        #endif
++        return CGRect(x: point.x + indent - surfaceCorrection,
+                       y: point.y + gap.top,
+                       width: max(1, contentWidth - indent),
+                       height: max(1, frame.height - gap.top - gap.bottom))
+@@ -231,13 +249,43 @@ final class CodeBlockFragment: DownrightFragment {
+         // Vertically centred in the header row so the badge never touches the
+         // band's top edge (§11.3).
+         let y = band.minY + max(0, (band.height - 17) / 2)
+-        return CGRect(x: band.maxX - width - RenderMetrics.codeInsetX, y: y, width: width, height: 17)
++        #if os(macOS)
++        let trailing = band.maxX - RenderMetrics.codeInsetX
++        #else
++        // The copy control is always visible on iOS, so the chip sits beside it
++        // instead of being swapped for it on hover.
++        let trailing = band.maxX - RenderMetrics.codeInsetX - copyControlSide - 6
++        #endif
++        return CGRect(x: trailing - width, y: y, width: width, height: 17)
+     }
+ 
+     /// A 28pt square: the smallest pointer target that does not need aiming.
+     /// The old 24x17 was a decoration you had to hunt for.
+     static let copyControlSide: CGFloat = 28
+ 
++    /// The code a copy puts on the pasteboard: the block without its fences.
++    static func codeText(of payload: FragmentPayload, in storage: NSTextStorage) -> String {
++        var range = payload.sourceRange
++        range.location = max(0, range.location)
++        range.length = min(range.length, storage.length - range.location)
++        guard range.length > 0 else { return "" }
++        // Strip the fences: what you want on the pasteboard is the code.
++        let lines = storage.attributedSubstring(from: range).string
++            .components(separatedBy: "\n")
++        var body = lines
++        // Tilde fences are as valid as backtick fences and the parser accepts
++        // both, so the pasteboard has to recognise both.
++        func isFence(_ line: String?) -> Bool {
++            guard let trimmed = line?.trimmingCharacters(in: .whitespaces),
++                  let marker = trimmed.first, marker == "`" || marker == "~" else { return false }
++            return trimmed.prefix(while: { $0 == marker }).count >= 3
++        }
++        if isFence(body.first) { body.removeFirst() }
++        if isFence(body.last) { body.removeLast() }
++        if body.last?.isEmpty == true { body.removeLast() }
++        return body.joined(separator: "\n")
++    }
++
+     static func copyButtonRect(in band: CGRect, style: StyleSheet, language: String) -> CGRect {
+         // Clamp to the band: the header's 36pt row keeps the full 28pt target,
+         // but the 14pt closing fence collapses the button to fit so the control
+@@ -248,9 +296,9 @@ final class CodeBlockFragment: DownrightFragment {
+     }
+ }
+ 
+-private extension NSImage {
+-    func tinted(_ color: NSColor) -> NSImage {
+-        NSImage(size: size, flipped: false) { rect in
++private extension PlatformImage {
++    func tinted(_ color: PlatformColor) -> PlatformImage {
++        PlatformImage(size: size, flipped: false) { rect in
+             self.draw(in: rect)
+             color.set()
+             rect.fill(using: .sourceAtop)
+diff --git a/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift b/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift
+index e665e27..7f1e13d 100644
+--- a/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift
++++ b/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Turns `[^12]` into one semantic superscript without touching source bytes.
+diff --git a/Sources/MarkdownRender/Fragments/FragmentBase.swift b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+index 14ac016..b6aa3a8 100644
+--- a/Sources/MarkdownRender/Fragments/FragmentBase.swift
++++ b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ // Object rendering (§11.3) without a WebView anywhere (§3.3).
+@@ -66,7 +70,11 @@ struct TableLayoutKey: Hashable {
+ /// View-side state the fragments read while drawing.  A class so a fragment
+ /// can hold it weakly and never keep the view alive.
+ public final class FragmentContext {
++    #if os(macOS)
+     public weak var textView: MarkdownTextView?
++    #else
++    public weak var readerView: MarkdownReaderView?
++    #endif
+     public var styleSheet: StyleSheet { didSet { styleToken = StyleToken.of(styleSheet) } }
+     /// Cache token for rendered images; see `StyleToken`.
+     public private(set) var styleToken: Int
+@@ -132,7 +140,11 @@ public final class FragmentContext {
+         checkboxPulses.append(CheckboxPulse(sourceRange: range, started: now, checked: checked))
+     }
+ 
++    #if os(macOS)
+     var storage: NSTextStorage? { textView?.textStorage }
++    #else
++    var storage: NSTextStorage? { readerView?.textStorage }
++    #endif
+ 
+     /// Strictly inside, not merely touching.
+     ///
+@@ -194,6 +206,17 @@ public class DownrightFragment: NSTextLayoutFragment {
+         return max(1, super.layoutFragmentFrame.width)
+     }
+ 
++    /// `point` moved to the column's leading edge.  NSTextView already hands a
++    /// fragment that point; UITextView hands it the fragment's own frame
++    /// origin, which TextKit insets by the paragraph indent.
++    func columnOrigin(_ point: CGPoint) -> CGPoint {
++        #if os(macOS)
++        point
++        #else
++        CGPoint(x: point.x - super.layoutFragmentFrame.minX, y: point.y)
++        #endif
++    }
++
+     /// Width of the reading column alone.  An object that belongs beside prose
+     /// — a callout's band, an image, a rule, the front-matter card — sizes
+     /// itself from this, or it ends a bleed lane wider than the paragraph above
+@@ -381,7 +404,7 @@ public final class ElisionCueFragment: NSTextLayoutFragment {
+         let lines = max(1, count - 1)
+         let style = context.styleSheet
+         let label = NSAttributedString(string: "⋯  \(lines) line\(lines == 1 ? "" : "s")", attributes: [
+-            .font: NSFont.systemFont(ofSize: 10.5, weight: .medium),
++            .font: PlatformFont.systemFont(ofSize: 10.5, weight: .medium),
+             .foregroundColor: style.textFaint,
+         ])
+         let frame = layoutFragmentFrame
+@@ -389,18 +412,29 @@ public final class ElisionCueFragment: NSTextLayoutFragment {
+         let y = point.y + max(0, (frame.height - size.height) / 2)
+         let center = point.x + frame.width / 2
+         let gap: CGFloat = 9
++        #if os(macOS)
+         style.rule.setStroke()
+         let path = NSBezierPath()
+         path.lineWidth = 1
+-        path.move(to: NSPoint(x: point.x, y: y + size.height / 2))
+-        path.line(to: NSPoint(x: center - size.width / 2 - gap, y: y + size.height / 2))
+-        path.move(to: NSPoint(x: center + size.width / 2 + gap, y: y + size.height / 2))
+-        path.line(to: NSPoint(x: point.x + frame.width, y: y + size.height / 2))
++        path.move(to: CGPoint(x: point.x, y: y + size.height / 2))
++        path.line(to: CGPoint(x: center - size.width / 2 - gap, y: y + size.height / 2))
++        path.move(to: CGPoint(x: center + size.width / 2 + gap, y: y + size.height / 2))
++        path.line(to: CGPoint(x: point.x + frame.width, y: y + size.height / 2))
+         path.stroke()
+-        let previous = NSGraphicsContext.current
+-        NSGraphicsContext.current = NSGraphicsContext(cgContext: cg, flipped: true)
+-        label.draw(at: NSPoint(x: center - size.width / 2, y: y))
+-        NSGraphicsContext.current = previous
++        #else
++        cg.saveGState()
++        cg.setStrokeColor(style.rule.cgColor)
++        cg.setLineWidth(1)
++        cg.move(to: CGPoint(x: point.x, y: y + size.height / 2))
++        cg.addLine(to: CGPoint(x: center - size.width / 2 - gap, y: y + size.height / 2))
++        cg.move(to: CGPoint(x: center + size.width / 2 + gap, y: y + size.height / 2))
++        cg.addLine(to: CGPoint(x: point.x + frame.width, y: y + size.height / 2))
++        cg.strokePath()
++        cg.restoreGState()
++        #endif
++        withPlatformDrawingContext(cg, flipped: true) {
++            label.draw(at: CGPoint(x: center - size.width / 2, y: y))
++        }
+     }
+ }
+ 
+@@ -420,7 +454,8 @@ extension NSAttributedString {
+         func height(_ string: NSAttributedString) -> CGFloat {
+             string.boundingRect(
+                 with: CGSize(width: width, height: .greatestFiniteMagnitude),
+-                options: [.usesLineFragmentOrigin, .usesFontLeading]
++                options: [.usesLineFragmentOrigin, .usesFontLeading],
++                context: nil
+             ).height
+         }
+         guard height(self) > maxHeight + 0.5 else { return self }
+@@ -506,7 +541,8 @@ extension DownrightFragment {
+             guard string.length > 0 else { return 0 }
+             return ceil(string.boundingRect(
+                 with: CGSize(width: width, height: .greatestFiniteMagnitude),
+-                options: [.usesLineFragmentOrigin, .usesFontLeading]
++                options: [.usesLineFragmentOrigin, .usesFontLeading],
++                context: nil
+             ).height)
+         }
+         return (bounds(text.label), bounds(text.source), width)
+@@ -556,13 +592,13 @@ extension DownrightFragment {
+ 
+ // MARK: - Drawing helpers
+ 
+-extension NSColor {
++extension PlatformColor {
+     /// Blend toward the background, for tints that must not compete with text.
+-    func mixed(with other: NSColor, amount: CGFloat) -> NSColor {
++    func mixed(with other: PlatformColor, amount: CGFloat) -> PlatformColor {
+         let a = usingColorSpace(.sRGB) ?? self
+         let b = other.usingColorSpace(.sRGB) ?? other
+         let t = Swift.max(0, Swift.min(1, amount))
+-        return NSColor(
++        return PlatformColor(
+             srgbRed: a.redComponent + (b.redComponent - a.redComponent) * t,
+             green: a.greenComponent + (b.greenComponent - a.greenComponent) * t,
+             blue: a.blueComponent + (b.blueComponent - a.blueComponent) * t,
+@@ -578,14 +614,19 @@ extension NSColor {
+ /// mirrored around the rect's midline before drawing or the bitmap appears
+ /// upside down.  The flip is isolated with `saveGState`/`restoreGState` and never
+ /// leaks into the surrounding context.
+-func drawNSImage(_ image: NSImage, in target: CGRect, in cg: CGContext, cornerRadius: CGFloat = 0) {
++func drawNSImage(_ image: PlatformImage, in target: CGRect, in cg: CGContext, cornerRadius: CGFloat = 0) {
+     var proposed = target
+     // Rasterize at this view's backing scale, not the main screen's — a
+     // drawing-handler NSImage has no representation, so `cgImage(forProposedRect:)`
+     // would otherwise sample at `NSScreen.main` and render math (and other
+     // bitmap fragments) at the wrong density on any other display.
++    #if os(macOS)
+     let drawingContext = NSGraphicsContext(cgContext: cg, flipped: true)
+     guard let cgImage = image.cgImage(forProposedRect: &proposed, context: drawingContext, hints: nil) else { return }
++    #else
++    _ = proposed
++    guard let cgImage = image.cgImage else { return }
++    #endif
+     cg.saveGState()
+     if cornerRadius > 0 {
+         cg.addPath(CGPath(roundedRect: target, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil))
+@@ -613,7 +654,7 @@ struct RectCorners: OptionSet {
+ extension CGContext {
+     /// Named to avoid overloading `CGContext.fill(_:)`, whose default-argument
+     /// overload resolution would otherwise recurse.
+-    func fillRect(_ rect: CGRect, color: NSColor, radius: CGFloat = 0) {
++    func fillRect(_ rect: CGRect, color: PlatformColor, radius: CGFloat = 0) {
+         guard rect.width > 0, rect.height > 0 else { return }
+         setFillColor(color.cgColor)
+         if radius > 0 {
+@@ -630,7 +671,7 @@ extension CGContext {
+     /// double-painted seam.  Rounding only the outer corners (top of the header,
+     /// bottom of the footer) and leaving the shared edges square keeps the whole
+     /// band a single flat tint with no overlap.
+-    func fillRect(_ rect: CGRect, color: NSColor, radius: CGFloat, corners: RectCorners) {
++    func fillRect(_ rect: CGRect, color: PlatformColor, radius: CGFloat, corners: RectCorners) {
+         guard rect.width > 0, rect.height > 0 else { return }
+         guard radius > 0, !corners.isEmpty else { fillRect(rect, color: color); return }
+         setFillColor(color.cgColor)
+@@ -665,9 +706,8 @@ extension CGContext {
+     /// AppKit's focus stack more than necessary.
+     func drawText(_ string: NSAttributedString, in rect: CGRect, flipped: Bool) {
+         guard string.length > 0, rect.width > 1 else { return }
+-        let previous = NSGraphicsContext.current
+-        NSGraphicsContext.current = NSGraphicsContext(cgContext: self, flipped: flipped)
+-        string.draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading])
+-        NSGraphicsContext.current = previous
++        withPlatformDrawingContext(self, flipped: flipped) {
++            string.draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
++        }
+     }
+ }
+diff --git a/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift b/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift
+index 82bf9ff..d229a38 100644
+--- a/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift
++++ b/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// YAML front matter as a compact metadata card, **not a code block** (§5.1).
+@@ -46,7 +50,8 @@ final class FrontMatterFragment: DownrightFragment {
+             let rect = (singleLine(field.value) as NSString).boundingRect(
+                 with: CGSize(width: valueWidth, height: .greatestFiniteMagnitude),
+                 options: [.usesLineFragmentOrigin, .usesFontLeading],
+-                attributes: [.font: font]
++                attributes: [.font: font],
++                context: nil
+             )
+             return partial + max(style.lineHeight, ceil(rect.height) + 6)
+         }
+@@ -58,13 +63,20 @@ final class FrontMatterFragment: DownrightFragment {
+ 
+     override func drawObject(at point: CGPoint, in cg: CGContext) {
+         guard isFirstParagraphOfBlock, let style = styleSheet, !fields.isEmpty else { return }
+-        let card = CGRect(x: point.x, y: point.y,
++        #if os(macOS)
++        let cardX = point.x
++        #else
++        // See `CodeBlockFragment.bandRect`: on UIKit `point` is the inset
++        // frame origin, not the column edge.
++        let cardX = point.x - layoutFragmentFrame.minX
++        #endif
++        let card = CGRect(x: cardX, y: point.y,
+                           width: proseContentWidth, height: layoutFragmentFrame.height)
+         let keyWidth = min(112, max(64, card.width * 0.20))
+         let valueX = card.minX + keyWidth + 18
+         let valueWidth = max(80, card.maxX - valueX - Self.horizontalInset)
+         let font = style.bodyFont().withSize(style.bodyFont().pointSize * 0.86)
+-        let keyFont = NSFont.systemFont(ofSize: font.pointSize * 0.90, weight: .medium)
++        let keyFont = PlatformFont.systemFont(ofSize: font.pointSize * 0.90, weight: .medium)
+         let isHovered = context?.hoveredFragmentRange == payload.sourceRange
+         cg.fillRect(
+             card.insetBy(dx: 1, dy: 1),
+@@ -81,7 +93,7 @@ final class FrontMatterFragment: DownrightFragment {
+             radius: 1.5
+         )
+ 
+-        let headerFont = NSFont.systemFont(ofSize: max(9, font.pointSize * 0.72), weight: .semibold)
++        let headerFont = PlatformFont.systemFont(ofSize: max(9, font.pointSize * 0.72), weight: .semibold)
+         let header = NSAttributedString(string: "Metadata", attributes: [
+             .font: headerFont,
+             .foregroundColor: style.textFaint,
+@@ -97,22 +109,30 @@ final class FrontMatterFragment: DownrightFragment {
+             flipped: true
+         )
+ 
+-        let editTitle = card.width < 180 ? "Edit" : "Edit metadata"
+-        let edit = NSAttributedString(string: editTitle, attributes: [
+-            .font: headerFont,
+-            .foregroundColor: isHovered ? style.accent : style.textFaint,
+-        ])
+-        let editWidth = ceil(edit.size().width)
+-        cg.drawText(
+-            edit,
+-            in: CGRect(
+-                x: card.maxX - Self.horizontalInset - editWidth,
+-                y: card.minY + 5,
+-                width: editWidth,
+-                height: 14
+-            ),
+-            flipped: true
+-        )
++        // The read-only iOS surface has no metadata editor to offer.
++        #if os(macOS)
++        let offersEdit = true
++        #else
++        let offersEdit = false
++        #endif
++        if offersEdit {
++            let editTitle = card.width < 180 ? "Edit" : "Edit metadata"
++            let edit = NSAttributedString(string: editTitle, attributes: [
++                .font: headerFont,
++                .foregroundColor: isHovered ? style.accent : style.textFaint,
++            ])
++            let editWidth = ceil(edit.size().width)
++            cg.drawText(
++                edit,
++                in: CGRect(
++                    x: card.maxX - Self.horizontalInset - editWidth,
++                    y: card.minY + 5,
++                    width: editWidth,
++                    height: 14
++                ),
++                flipped: true
++            )
++        }
+         cg.fillRect(
+             CGRect(
+                 x: card.minX + Self.horizontalInset,
+@@ -130,7 +150,8 @@ final class FrontMatterFragment: DownrightFragment {
+             ])
+             let valueHeight = max(style.lineHeight, ceil(value.boundingRect(
+                 with: CGSize(width: valueWidth, height: .greatestFiniteMagnitude),
+-                options: [.usesLineFragmentOrigin, .usesFontLeading]
++                options: [.usesLineFragmentOrigin, .usesFontLeading],
++                context: nil
+             ).height) + 6)
+             let key = NSAttributedString(string: field.key, attributes: [
+                 .font: keyFont, .foregroundColor: style.textFaint,
+diff --git a/Sources/MarkdownRender/Fragments/ImageFragment.swift b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+index f3e7cc4..631b428 100644
+--- a/Sources/MarkdownRender/Fragments/ImageFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+@@ -1,19 +1,29 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Lets an image's async-load completion reach its text view without carrying
+ /// a non-Sendable reference across the background queue.  The completion runs
+ /// on the main actor, where the weak view is valid; the box only exists to
+ /// make the handoff honest under strict concurrency.
++#if os(macOS)
++private typealias ImageLoadHost = MarkdownTextView
++#else
++private typealias ImageLoadHost = MarkdownReaderView
++#endif
++
+ private final class ImageLoadCompletionBox: @unchecked Sendable {
+-    weak var view: MarkdownTextView?
++    weak var view: ImageLoadHost?
+     /// The payload reference, not a copied range: an edit that lands while the
+     /// decode is in flight projects the payload's ranges in place, so reading
+     /// `sourceRange` at completion time invalidates where the image lives
+     /// *now* rather than where it lived when the load was scheduled.
+     let payload: FragmentPayload
+ 
+-    init(view: MarkdownTextView?, payload: FragmentPayload) {
++    init(view: ImageLoadHost?, payload: FragmentPayload) {
+         self.view = view
+         self.payload = payload
+     }
+@@ -28,7 +38,7 @@ private final class ImageLoadCompletionBox: @unchecked Sendable {
+ final class ImageFragment: DownrightFragment {
+ 
+     private enum LoadResult {
+-        case loaded(NSImage)
++        case loaded(PlatformImage)
+         /// Not in the cache yet; a background decode is in flight and will
+         /// invalidate this fragment's layout when it lands.
+         case loading
+@@ -49,6 +59,7 @@ final class ImageFragment: DownrightFragment {
+     }
+ 
+     override func drawObject(at point: CGPoint, in cg: CGContext) {
++        let point = columnOrigin(point)
+         guard isFirstParagraphOfBlock, let style = styleSheet else { return }
+         let picture = displaySize()
+         // Images sit in the reading column, so they centre on it — centring on
+@@ -61,7 +72,7 @@ final class ImageFragment: DownrightFragment {
+             cg.saveGState()
+             cg.setShadow(offset: CGSize(width: 0, height: 2),
+                          blur: RenderMetrics.imageShadowRadius,
+-                         color: NSColor.black.withAlphaComponent(style.increaseContrast ? 0 : 0.18).cgColor)
++                         color: PlatformColor.black.withAlphaComponent(style.increaseContrast ? 0 : 0.18).cgColor)
+             cg.fillRect(rect, color: matte(for: image, style: style),
+                         radius: RenderMetrics.imageCornerRadius)
+             cg.restoreGState()
+@@ -140,15 +151,15 @@ final class ImageFragment: DownrightFragment {
+     /// poles — the page itself in a light theme, a warm near-white in a dark
+     /// one.  An opaque image covers the plate entirely, so this costs nothing
+     /// when there is no alpha to matte.
+-    private func matte(for image: NSImage, style: StyleSheet) -> NSColor {
+-        guard image.representations.first?.hasAlpha == true else { return style.background }
++    private func matte(for image: PlatformImage, style: StyleSheet) -> PlatformColor {
++        guard platformImageHasAlpha(image) else { return style.background }
+         let page = style.background
+         let ink = style.text
+         guard Self.brightness(of: ink) > Self.brightness(of: page) else { return page }
+         return ink.mixed(with: page, amount: 0.06)
+     }
+ 
+-    private static func brightness(of color: NSColor) -> CGFloat {
++    private static func brightness(of color: PlatformColor) -> CGFloat {
+         (color.usingColorSpace(.sRGB) ?? color).brightnessComponent
+     }
+ 
+@@ -192,7 +203,11 @@ final class ImageFragment: DownrightFragment {
+     /// load share one background read; a failed load is retried on the next
+     /// layout pass because the cache still misses.
+     private func scheduleAsyncLoad(_ url: URL, dimension: Int) {
++        #if os(macOS)
+         let box = ImageLoadCompletionBox(view: context?.textView, payload: payload)
++        #else
++        let box = ImageLoadCompletionBox(view: context?.readerView, payload: payload)
++        #endif
+         MarkdownFragmentImageCaches.images.loadImageAsync(
+             for: url, maxPixelDimension: dimension
+         ) { image in
+@@ -204,13 +219,21 @@ final class ImageFragment: DownrightFragment {
+     }
+ 
+     private var viewportHeightCap: CGFloat {
++        #if os(macOS)
+         max(120, (context?.textView?.enclosingScrollView?.contentSize.height ?? 800) * 0.70)
++        #else
++        max(120, (context?.readerView?.bounds.height ?? 800) * 0.70)
++        #endif
+     }
+ 
+     private var targetPixelDimension: Int {
++        #if os(macOS)
+         let scale = context?.textView?.window?.backingScaleFactor
+             ?? NSScreen.main?.backingScaleFactor
+             ?? 2
++        #else
++        let scale = context?.readerView?.traitCollection.displayScale ?? platformMainDisplayScale()
++        #endif
+         // A hard per-image ceiling prevents one pathological asset from
+         // defeating the cache's total budget before it can be evicted.
+         let points = max(contentWidth, viewportHeightCap)
+diff --git a/Sources/MarkdownRender/Fragments/InlineCodePill.swift b/Sources/MarkdownRender/Fragments/InlineCodePill.swift
+index ce706b4..34f992a 100644
+--- a/Sources/MarkdownRender/Fragments/InlineCodePill.swift
++++ b/Sources/MarkdownRender/Fragments/InlineCodePill.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ 
+ /// The tinted band behind an inline code span (§11.3).
+ ///
+diff --git a/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift b/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift
+index c4497f7..0ea7f56 100644
+--- a/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift
++++ b/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Builds inline math substitutions without changing the source text.
+@@ -56,8 +60,8 @@ extension MathRenderer {
+     static func inlineAttachment(
+         latex: String,
+         pointSize: CGFloat,
+-        color: NSColor,
+-        font: NSFont
++        color: PlatformColor,
++        font: PlatformFont
+     ) -> NSAttributedString? {
+         guard let image = image(latex: latex, display: false, pointSize: pointSize, color: color),
+               image.size.width > 0, image.size.height > 0 else {
+diff --git a/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift b/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift
+index 24940bb..de2b4d6 100644
+--- a/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ 
+ /// Typographic list markers. Markdown syntax remains hidden while the semantic
+ /// ornament sits in the hanging indent in Read and Live modes.
+@@ -43,7 +47,7 @@ final class ListOrnamentFragment: DownrightFragment {
+     /// descent rests on the box's bottom edge.  That gives the baseline from
+     /// the line box alone — no glyph metrics needed — and the x-height centre
+     /// follows from the font.
+-    static func ornamentCentreY(lineTop: CGFloat, lineHeight: CGFloat, font: NSFont) -> CGFloat {
++    static func ornamentCentreY(lineTop: CGFloat, lineHeight: CGFloat, font: PlatformFont) -> CGFloat {
+         let baseline = lineTop + lineHeight + font.descender
+         return baseline - font.xHeight / 2
+     }
+@@ -70,18 +74,18 @@ final class ListOrnamentFragment: DownrightFragment {
+         }
+ 
+         let marker: String
+-        let color: NSColor
+-        let font: NSFont
++        let color: PlatformColor
++        let font: PlatformFont
+         if payload.detail.hasPrefix("ordered:") {
+             marker = String(payload.detail.dropFirst("ordered:".count)) + "."
+             color = style.textSecondary
+-            font = NSFont.monospacedDigitSystemFont(ofSize: style.bodyFont().pointSize * 0.92,
++            font = PlatformFont.monospacedDigitSystemFont(ofSize: style.bodyFont().pointSize * 0.92,
+                                                     weight: .regular)
+         } else {
+             let level = Int(payload.detail.dropFirst("unordered:".count)) ?? 1
+             marker = level % 3 == 1 ? "●" : (level % 3 == 2 ? "○" : "▪")
+             color = style.textFaint
+-            font = NSFont.systemFont(ofSize: style.bodyFont().pointSize * 0.30, weight: .regular)
++            font = PlatformFont.systemFont(ofSize: style.bodyFont().pointSize * 0.30, weight: .regular)
+         }
+         let attributed = NSAttributedString(string: marker, attributes: [.font: font, .foregroundColor: color])
+         let size = attributed.size()
+diff --git a/Sources/MarkdownRender/Fragments/MathFragment.swift b/Sources/MarkdownRender/Fragments/MathFragment.swift
+index 217dd3e..0417343 100644
+--- a/Sources/MarkdownRender/Fragments/MathFragment.swift
++++ b/Sources/MarkdownRender/Fragments/MathFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Block math (§11.3), typeset by SwiftMath and **sized optically against body
+@@ -34,6 +38,7 @@ final class MathFragment: DownrightFragment {
+     }
+ 
+     override func drawObject(at point: CGPoint, in cg: CGContext) {
++        let point = columnOrigin(point)
+         guard isFirstParagraphOfBlock, let style = styleSheet else { return }
+         guard let image = renderedImage() else {
+             drawFailedObject(
+@@ -52,7 +57,7 @@ final class MathFragment: DownrightFragment {
+         draw(image: image, at: origin, in: cg)
+     }
+ 
+-    private func renderedImage() -> NSImage? {
++    private func renderedImage() -> PlatformImage? {
+         guard let style = styleSheet else { return nil }
+         let pointSize = style.mathPointSize * 1.12
+         // SwiftMath crops tightly to the glyph bounds; the padded bitmap keeps
+@@ -66,11 +71,11 @@ final class MathFragment: DownrightFragment {
+ extension DownrightFragment {
+     /// Draws an `NSImage` into a flipped CGContext without going through
+     /// AppKit's focus stack, which is not valid inside a layout fragment.
+-    func draw(image: NSImage, in target: CGRect, in cg: CGContext, cornerRadius: CGFloat = 0) {
++    func draw(image: PlatformImage, in target: CGRect, in cg: CGContext, cornerRadius: CGFloat = 0) {
+         drawNSImage(image, in: target, in: cg, cornerRadius: cornerRadius)
+     }
+ 
+-    func draw(image: NSImage, at origin: CGPoint, in cg: CGContext) {
++    func draw(image: PlatformImage, at origin: CGPoint, in cg: CGContext) {
+         draw(image: image, in: CGRect(origin: origin, size: image.size), in: cg)
+     }
+ }
+diff --git a/Sources/MarkdownRender/Fragments/MathRenderer.swift b/Sources/MarkdownRender/Fragments/MathRenderer.swift
+index 7d2db1f..617b54d 100644
+--- a/Sources/MarkdownRender/Fragments/MathRenderer.swift
++++ b/Sources/MarkdownRender/Fragments/MathRenderer.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import SwiftMath
+ 
+ /// LaTeX → image, via SwiftMath's pure Core Text typesetter.
+@@ -23,9 +27,9 @@ public enum MathRenderer {
+         latex: String,
+         display: Bool,
+         pointSize: CGFloat,
+-        color: NSColor,
++        color: PlatformColor,
+         padding: CGFloat = 0
+-    ) -> NSImage? {
++    ) -> PlatformImage? {
+         let trimmed = latex.trimmingCharacters(in: .whitespacesAndNewlines)
+         guard !trimmed.isEmpty else { return nil }
+         // SwiftMath traps rather than fails when it cannot find its fonts, so
+@@ -59,15 +63,24 @@ public enum MathRenderer {
+             // formula can sit flush against (or past) its own frame.  The
+             // block fragment asks for 8pt of air on every edge; without it a
+             // tall integral or fraction clips through the top of the line box.
+-            let size = NSSize(
++            let size = CGSize(
+                 width: image.size.width + padding * 2,
+                 height: image.size.height + padding * 2)
+-            let padded = NSImage(size: size)
++            #if os(macOS)
++            let padded = PlatformImage(size: size)
+             padded.lockFocus()
+-            image.draw(in: NSRect(x: padding, y: padding, width: image.size.width,
++            image.draw(in: CGRect(x: padding, y: padding, width: image.size.width,
+                                   height: image.size.height))
+             padded.unlockFocus()
+             return padded
++            #else
++            let format = UIGraphicsImageRendererFormat.preferred()
++            format.opaque = false
++            return UIGraphicsImageRenderer(size: size, format: format).image { _ in
++                image.draw(in: CGRect(x: padding, y: padding, width: image.size.width,
++                                      height: image.size.height))
++            }
++            #endif
+         }
+     }
+ 
+@@ -129,7 +142,7 @@ public enum MathRenderer {
+         return nil
+     }
+ 
+-    private static func colorToken(_ color: NSColor) -> String {
++    private static func colorToken(_ color: PlatformColor) -> String {
+         let rgb = color.usingColorSpace(.sRGB) ?? color
+         return String(format: "%.3f,%.3f,%.3f,%.3f",
+                       rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent)
+diff --git a/Sources/MarkdownRender/Fragments/MermaidFragment.swift b/Sources/MarkdownRender/Fragments/MermaidFragment.swift
+index aec67d8..dfd1ffc 100644
+--- a/Sources/MarkdownRender/Fragments/MermaidFragment.swift
++++ b/Sources/MarkdownRender/Fragments/MermaidFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Mermaid diagrams (§11.3), rendered natively by `beautiful-mermaid-swift`
+@@ -36,6 +40,7 @@ final class MermaidFragment: DownrightFragment {
+     }
+ 
+     override func drawObject(at point: CGPoint, in cg: CGContext) {
++        let point = columnOrigin(point)
+         guard isFirstParagraphOfBlock, let style = styleSheet else { return }
+         guard let image = renderedImage() else {
+             drawFailedObject(
+@@ -64,7 +69,7 @@ final class MermaidFragment: DownrightFragment {
+         return CGSize(width: contentWidth, height: (natural.height * scale).rounded())
+     }
+ 
+-    private func renderedImage() -> NSImage? {
++    private func renderedImage() -> PlatformImage? {
+         guard let style = styleSheet else { return nil }
+         return MermaidRendererBridge.image(source: payload.detail, styleSheet: style)
+     }
+diff --git a/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift b/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift
+index 4eed4b3..fe7297a 100644
+--- a/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift
++++ b/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import BeautifulMermaid
+ 
+ /// Mermaid → image, native (§3.3), themed from the active `StyleSheet`.
+@@ -11,7 +15,7 @@ import BeautifulMermaid
+ public enum MermaidRendererBridge {
+ 
+     /// Render mermaid source, themed from the active `StyleSheet`.
+-    public static func image(source: String, styleSheet: StyleSheet) -> NSImage? {
++    public static func image(source: String, styleSheet: StyleSheet) -> PlatformImage? {
+         let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+         guard !trimmed.isEmpty else { return nil }
+         let scale = scale()
+@@ -53,7 +57,7 @@ public enum MermaidRendererBridge {
+     ///
+     /// Air around the diagram is deliberately *not* baked in here — the
+     /// fragment adds it, so one place decides the spacing.
+-    private static func render(_ prepared: PreparedDiagram, scale: CGFloat) -> NSImage? {
++    private static func render(_ prepared: PreparedDiagram, scale: CGFloat) -> PlatformImage? {
+         let bounds = prepared.bounds
+         guard bounds.width > 0, bounds.height > 0 else { return nil }
+         // Slack only so a stroke, shadow, or overshooting label near the edge
+@@ -73,13 +77,22 @@ public enum MermaidRendererBridge {
+         ctx.scaleBy(x: 1, y: -1)
+         ctx.scaleBy(x: scale, y: scale)
+         ctx.translateBy(x: -padded.minX, y: -padded.minY)
++        #if os(macOS)
+         prepared.render(ctx, bounds)
++        #else
++        // On UIKit the renderer draws labels with `NSAttributedString.draw`,
++        // which needs this bitmap as the current UIKit context; without it the
++        // boxes and edges draw and every label is lost.
++        withPlatformDrawingContext(ctx, flipped: true) {
++            prepared.render(ctx, bounds)
++        }
++        #endif
+         guard let cgImage = ctx.makeImage() else { return nil }
+ 
+         guard let ink = inkBounds(of: ctx), let cropped = cgImage.cropping(to: ink) else {
+-            return NSImage(cgImage: cgImage, size: padded.size)
++            return PlatformImage(cgImage: cgImage, size: padded.size)
+         }
+-        return NSImage(cgImage: cropped,
++        return PlatformImage(cgImage: cropped,
+                        size: CGSize(width: CGFloat(cropped.width) / scale,
+                                     height: CGFloat(cropped.height) / scale))
+     }
+@@ -141,6 +154,6 @@ public enum MermaidRendererBridge {
+     }
+ 
+     private static func scale() -> CGFloat {
+-        NSScreen.main?.backingScaleFactor ?? 2
++        platformMainDisplayScale()
+     }
+ }
+diff --git a/Sources/MarkdownRender/Fragments/TableFragment.swift b/Sources/MarkdownRender/Fragments/TableFragment.swift
+index fbc08dc..09751b7 100644
+--- a/Sources/MarkdownRender/Fragments/TableFragment.swift
++++ b/Sources/MarkdownRender/Fragments/TableFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Materialises the semantic content of a Markdown table cell.
+@@ -258,7 +262,8 @@ struct TableLayout {
+                 let rect = (value as NSString).boundingRect(
+                     with: CGSize(width: widths[index], height: style.lineHeight * 3),
+                     options: [.usesLineFragmentOrigin, .usesFontLeading],
+-                    attributes: row.isHeader ? headerAttributes : cellAttributes
++                    attributes: row.isHeader ? headerAttributes : cellAttributes,
++                    context: nil
+                 )
+                 lines = max(lines, min(3, ceil(rect.height / max(1, style.lineHeight))))
+             }
+@@ -290,7 +295,7 @@ struct TableLayout {
+     /// rule was calibrated at.
+     private static let proseCharacters: CGFloat = 25
+ 
+-    private static func bodyFont(style: StyleSheet, scale: CGFloat) -> NSFont {
++    private static func bodyFont(style: StyleSheet, scale: CGFloat) -> PlatformFont {
+         let body = style.bodyFont()
+         guard scale < 1 else { return body }
+         return body.withSize(body.pointSize * scale)
+@@ -309,7 +314,7 @@ struct TableLayout {
+     /// labels with the fields they label.  Left at body size the header
+     /// minimums would be the one demand the ladder cannot reduce, so a table
+     /// whose headers are its widest cells would stack however small the cells go.
+-    static func headerLabel(style: StyleSheet, scale: CGFloat) -> (font: NSFont, kern: CGFloat) {
++    static func headerLabel(style: StyleSheet, scale: CGFloat) -> (font: PlatformFont, kern: CGFloat) {
+         let body = style.bodyFont().pointSize
+         return (style.emphasisFont(bold: true, italic: false).withSize(body * 0.85 * scale),
+                 body * 0.06 * scale)
+@@ -402,7 +407,8 @@ struct TableLayout {
+                 let rect = (value as NSString).boundingRect(
+                     with: CGSize(width: widths[index], height: .greatestFiniteMagnitude),
+                     options: [.usesLineFragmentOrigin, .usesFontLeading],
+-                    attributes: row.isHeader ? headerAttributes : cellAttributes
++                    attributes: row.isHeader ? headerAttributes : cellAttributes,
++                    context: nil
+                 )
+                 if rect.height > cap { return false }
+             }
+@@ -483,13 +489,14 @@ struct TableLayout {
+     static func stackedCellHeight(
+         value: String,
+         width: CGFloat,
+-        font: NSFont,
++        font: PlatformFont,
+         style: StyleSheet
+     ) -> CGFloat {
+         let rect = (value as NSString).boundingRect(
+             with: CGSize(width: width, height: style.lineHeight * 4),
+             options: [.usesLineFragmentOrigin, .usesFontLeading],
+-            attributes: [.font: font]
++            attributes: [.font: font],
++            context: nil
+         )
+         let lines = min(CGFloat(4), max(1, ceil(rect.height / max(1, style.lineHeight))))
+         return lines * style.lineHeight + style.baselineGrid
+@@ -575,6 +582,7 @@ final class TableRowFragment: DownrightFragment {
+     }
+ 
+     override func drawObject(at point: CGPoint, in cg: CGContext) {
++        let point = columnOrigin(point)
+         guard let style = styleSheet, let layout = layout(), let row else { return }
+         let rowHeight = rowIndex < layout.rowHeights.count ? layout.rowHeights[rowIndex] : style.lineHeight
+         let frame = CGRect(x: point.x, y: point.y, width: max(contentWidth, layout.totalWidth), height: rowHeight)
+@@ -662,7 +670,7 @@ final class TableRowFragment: DownrightFragment {
+             .kern: label.kern,
+         ], range: whole)
+         text.enumerateAttribute(.font, in: whole) { value, range, _ in
+-            let font = value as? NSFont ?? style.bodyFont()
++            let font = value as? PlatformFont ?? style.bodyFont()
+             let label = font.isFixedPitch
+                 ? style.monoFont(size: size)
+                 : style.emphasisFont(
+@@ -683,7 +691,7 @@ final class TableRowFragment: DownrightFragment {
+     ) {
+         let whole = NSRange(location: 0, length: text.length)
+         text.enumerateAttribute(.font, in: whole) { value, range, _ in
+-            let font = value as? NSFont ?? style.bodyFont()
++            let font = value as? PlatformFont ?? style.bodyFont()
+             text.addAttribute(.font, value: font.withSize(font.pointSize * scale), range: range)
+         }
+     }
+@@ -731,7 +739,7 @@ final class TableRowFragment: DownrightFragment {
+                 let labelParagraph = NSMutableParagraphStyle()
+                 labelParagraph.lineBreakMode = .byTruncatingTail
+                 let labelText = NSAttributedString(string: label, attributes: [
+-                    .font: NSFont.systemFont(ofSize: max(10, style.bodyFont().pointSize * 0.72), weight: .semibold),
++                    .font: PlatformFont.systemFont(ofSize: max(10, style.bodyFont().pointSize * 0.72), weight: .semibold),
+                     .foregroundColor: style.textSecondary,
+                     .kern: style.bodyFont().pointSize * 0.045,
+                     .paragraphStyle: labelParagraph,
+diff --git a/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift b/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift
+index a324cc3..71d5a92 100644
+--- a/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// A horizontal rule as a hairline with generous space (§11.3), not a thick
+@@ -15,6 +19,7 @@ final class ThematicBreakFragment: DownrightFragment {
+     }
+ 
+     override func drawObject(at point: CGPoint, in cg: CGContext) {
++        let point = columnOrigin(point)
+         guard isFirstParagraphOfBlock, let style = styleSheet else { return }
+         let height = layoutFragmentFrame.height
+         // Derived from the type ramp, not fixed: at 17pt body these are the
+diff --git a/Sources/MarkdownRender/Motion.swift b/Sources/MarkdownRender/Motion.swift
+index 949e47d..f8ba1ec 100644
+--- a/Sources/MarkdownRender/Motion.swift
++++ b/Sources/MarkdownRender/Motion.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import QuartzCore
+ 
+@@ -1009,3 +1010,4 @@ public enum Motion {
+         }
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/RenderContracts.swift b/Sources/MarkdownRender/RenderContracts.swift
+index b2fe8aa..797e88d 100644
+--- a/Sources/MarkdownRender/RenderContracts.swift
++++ b/Sources/MarkdownRender/RenderContracts.swift
+@@ -1,6 +1,10 @@
+ // Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ // Original file by the Downright contributors (MIT); see git history for the changes.
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ // The render layer's stable surface.  §3.2's "one text surface, three modes" is
+@@ -343,13 +347,13 @@ public struct ThemeColor: Codable, Sendable, Equatable {
+ 
+     /// `#rrggbb`, `#rrggbbaa`, or `system:<name>` naming an `NSColor` class
+     /// property (`labelColor`, `controlAccentColor`, …).
+-    public func resolved() -> NSColor {
++    public func resolved() -> PlatformColor {
+         if raw.hasPrefix("system:") {
+             let name = String(raw.dropFirst("system:".count))
+-            if let c = NSColor.systemColorNamed(name) { return c }
+-            return .labelColor
++            if let c = PlatformColor.systemColorNamed(name) { return c }
++            return PlatformColor.systemColorNamed("label")!
+         }
+-        return NSColor(hexString: raw) ?? .labelColor
++        return PlatformColor(hexString: raw) ?? PlatformColor.systemColorNamed("label")!
+     }
+ }
+ 
+@@ -488,7 +492,7 @@ public struct Theme: Codable, Sendable, Equatable {
+ 
+ // MARK: - Colour helpers
+ 
+-extension NSColor {
++extension PlatformColor {
+     public convenience init?(hexString: String) {
+         var s = hexString.trimmingCharacters(in: .whitespaces)
+         if s.hasPrefix("#") { s.removeFirst() }
+@@ -501,8 +505,26 @@ extension NSColor {
+         self.init(srgbRed: r, green: g, blue: b, alpha: a)
+     }
+ 
+-    static func systemColorNamed(_ name: String) -> NSColor? {
++    static func systemColorNamed(_ name: String) -> PlatformColor? {
++        #if !os(macOS)
++        // UIKit names for the AppKit semantic colours themes may reference.
+         switch name {
++        case "label", "labelColor": return .label
++        case "secondaryLabel", "secondaryLabelColor": return .secondaryLabel
++        case "tertiaryLabel", "tertiaryLabelColor": return .tertiaryLabel
++        case "quaternaryLabel", "quaternaryLabelColor": return .quaternaryLabel
++        case "textBackground", "textBackgroundColor": return .systemBackground
++        case "controlBackground", "controlBackgroundColor": return .secondarySystemGroupedBackground
++        case "underPageBackground", "underPageBackgroundColor": return .systemGroupedBackground
++        case "accent", "controlAccentColor": return .tintColor
++        case "selectedTextBackground", "selectedTextBackgroundColor": return .tintColor.withAlphaComponent(0.3)
++        case "separator", "separatorColor": return .separator
++        case "link", "linkColor": return .link
++        default: break
++        }
++        #endif
++        switch name {
++        #if os(macOS)
+         case "label", "labelColor": return .labelColor
+         case "secondaryLabel", "secondaryLabelColor": return .secondaryLabelColor
+         case "tertiaryLabel", "tertiaryLabelColor": return .tertiaryLabelColor
+@@ -514,6 +536,7 @@ extension NSColor {
+         case "selectedTextBackground", "selectedTextBackgroundColor": return .selectedTextBackgroundColor
+         case "separator", "separatorColor": return .separatorColor
+         case "link", "linkColor": return .linkColor
++        #endif
+         case "systemRed": return .systemRed
+         case "systemGreen": return .systemGreen
+         case "systemBlue": return .systemBlue
+diff --git a/Sources/MarkdownRender/Theme/PreviewAppearance.swift b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+index 4083a5b..72cbd0a 100644
+--- a/Sources/MarkdownRender/Theme/PreviewAppearance.swift
++++ b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+@@ -1,5 +1,6 @@
+ // Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ // Original file by the Downright contributors (MIT); see git history for the changes.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ 
+@@ -106,3 +107,4 @@ public enum PreviewAppearanceStore {
+         )
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/Theme/StyleSheet.swift b/Sources/MarkdownRender/Theme/StyleSheet.swift
+index fc3304a..e0e2a19 100644
+--- a/Sources/MarkdownRender/Theme/StyleSheet.swift
++++ b/Sources/MarkdownRender/Theme/StyleSheet.swift
+@@ -1,6 +1,10 @@
+ // Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ // Original file by the Downright contributors (MIT); see git history for the changes.
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import CoreText
+ import MarkdownCore
+ 
+@@ -22,14 +26,14 @@ public struct StyleSheet {
+     /// Detached child windows do not inherit their document window's
+     /// appearance reliably, so chrome such as the density preview needs this
+     /// same value to resolve native drawing and controls consistently.
+-    public let appearance: NSAppearance
++    public let appearance: PlatformAppearance
+ 
+     // MARK: Fonts (resolved once)
+ 
+-    private let body: NSFont
+-    private let headings: [NSFont]
+-    private let mono: NSFont
+-    private let emphasis: [NSFont]  // indexed by `emphasisIndex(bold:italic:)`
++    private let body: PlatformFont
++    private let headings: [PlatformFont]
++    private let mono: PlatformFont
++    private let emphasis: [PlatformFont]  // indexed by `emphasisIndex(bold:italic:)`
+ 
+     // MARK: Metrics
+ 
+@@ -51,36 +55,36 @@ public struct StyleSheet {
+ 
+     // MARK: Colours
+ 
+-    public var background: NSColor
+-    public var surface: NSColor
+-    public var text: NSColor
+-    public var textSecondary: NSColor
+-    public var textFaint: NSColor
+-    public var marker: NSColor
+-    public var accent: NSColor
+-    public var link: NSColor
+-    public var rule: NSColor
+-    public var codeBackground: NSColor
+-    public var inlineCodeBackground: NSColor
+-    public var codeRule: NSColor
+-    public var railTick: NSColor
+-    public var railTickCurrent: NSColor
+-    public var quoteRule: NSColor
+-    public var pathMissing: NSColor
+-    public var searchHit: NSColor
+-    public var searchHitCurrent: NSColor
+-    public var selection: NSColor
++    public var background: PlatformColor
++    public var surface: PlatformColor
++    public var text: PlatformColor
++    public var textSecondary: PlatformColor
++    public var textFaint: PlatformColor
++    public var marker: PlatformColor
++    public var accent: PlatformColor
++    public var link: PlatformColor
++    public var rule: PlatformColor
++    public var codeBackground: PlatformColor
++    public var inlineCodeBackground: PlatformColor
++    public var codeRule: PlatformColor
++    public var railTick: PlatformColor
++    public var railTickCurrent: PlatformColor
++    public var quoteRule: PlatformColor
++    public var pathMissing: PlatformColor
++    public var searchHit: PlatformColor
++    public var searchHitCurrent: PlatformColor
++    public var selection: PlatformColor
+ 
+     /// The start action uses Apple's blue control colour rather than the
+     /// document theme accent.  The latter is semantic editor colour used for
+     /// carets, links, tasks, and review marks; changing those just to restyle
+     /// the welcome CTA would make a theme switch change document meaning.
+-    private let startActionAccent: NSColor
++    private let startActionAccent: PlatformColor
+ 
+     /// The welcome surface has one primary action.  Keep it distinct from the
+     /// editor accent so changing the document's semantic accent does not turn
+     /// the start window into a bright blue slab.
+-    public var startWindowPrimaryAction: NSColor {
++    public var startWindowPrimaryAction: PlatformColor {
+         // The label is white in every state. Darken only as far as needed to
+         // retain 5.2:1 at rest, leaving room for the hover highlight to lift
+         // the fill without dropping below WCAG AA.
+@@ -90,13 +94,13 @@ public struct StyleSheet {
+                 ?? startActionAccent
+             if Self.contrastRatio(.white, candidate) >= 5.2 { return candidate }
+         }
+-        return NSColor(calibratedRed: 0.08, green: 0.28, blue: 0.58, alpha: 1)
++        return PlatformColor(calibratedRed: 0.08, green: 0.28, blue: 0.58, alpha: 1)
+     }
+ 
+-    private let headingColors: [NSColor]
+-    private let calloutColors: [NSColor]      // note, warning, success, danger, important
+-    private let changeColors: [NSColor]       // added, removed, modified
+-    private let codeColors: [SyntaxToken: NSColor]
++    private let headingColors: [PlatformColor]
++    private let calloutColors: [PlatformColor]      // note, warning, success, danger, important
++    private let changeColors: [PlatformColor]       // added, removed, modified
++    private let codeColors: [SyntaxToken: PlatformColor]
+ 
+     // MARK: Accessibility (§11.4)
+ 
+@@ -108,21 +112,27 @@ public struct StyleSheet {
+ 
+     public init(
+         theme: Theme,
+-        appearance: NSAppearance,
++        appearance: PlatformAppearance,
+         reduceMotionOverride: Bool? = nil
+     ) {
+         self.theme = theme
+         self.revision = ThemeStore.shared.revision
+         self.appearance = appearance
+ 
+-        let workspace = NSWorkspace.shared
+         // A non-nil override is used by deterministic previews and tests. It
+         // must be able to force either accessibility branch; otherwise a
+         // headless runner's inherited Reduce Motion setting can silently turn
+         // an animation geometry test into a different state machine.
++        #if os(macOS)
++        let workspace = NSWorkspace.shared
+         reduceMotion = reduceMotionOverride ?? workspace.accessibilityDisplayShouldReduceMotion
+         increaseContrast = workspace.accessibilityDisplayShouldIncreaseContrast
+         reduceTransparency = workspace.accessibilityDisplayShouldReduceTransparency
++        #else
++        reduceMotion = reduceMotionOverride ?? UIAccessibility.isReduceMotionEnabled
++        increaseContrast = UIAccessibility.isDarkerSystemColorsEnabled
++        reduceTransparency = UIAccessibility.isReduceTransparencyEnabled
++        #endif
+ 
+         let typography = theme.typography
+ 
+@@ -133,7 +143,7 @@ public struct StyleSheet {
+         )
+         body = bodyFont
+         headings = (1...6).map { level in
+-            let weight: NSFont.Weight = level <= 3
++            let weight: PlatformFont.Weight = level <= 3
+                 ? .bold
+                 : (level == 6 ? .medium : .semibold)
+             let font = StyleSheet.systemFont(
+@@ -227,13 +237,13 @@ public struct StyleSheet {
+ 
+     // MARK: - Fonts
+ 
+-    public func bodyFont() -> NSFont { body }
++    public func bodyFont() -> PlatformFont { body }
+ 
+-    public func headingFont(level: Int) -> NSFont { headings[StyleSheet.clampLevel(level) - 1] }
++    public func headingFont(level: Int) -> PlatformFont { headings[StyleSheet.clampLevel(level) - 1] }
+ 
+-    public func monoFont(size: CGFloat? = nil) -> NSFont {
++    public func monoFont(size: CGFloat? = nil) -> PlatformFont {
+         guard let size, size != mono.pointSize else { return mono }
+-        return NSFont(descriptor: mono.fontDescriptor, size: size) ?? mono
++        return platformFont(descriptor: mono.fontDescriptor, size: size) ?? mono
+     }
+ 
+     /// Attributes rather than just a font, because a ligature *toggle* is not
+@@ -245,7 +255,7 @@ public struct StyleSheet {
+         [.font: monoFont(size: size), .ligature: theme.typography.monoLigatures ? 1 : 0]
+     }
+ 
+-    public func emphasisFont(bold: Bool, italic: Bool) -> NSFont {
++    public func emphasisFont(bold: Bool, italic: Bool) -> PlatformFont {
+         emphasis[(bold ? 1 : 0) + (italic ? 2 : 0)]
+     }
+ 
+@@ -270,54 +280,68 @@ public struct StyleSheet {
+ 
+     private static func clampLevel(_ level: Int) -> Int { min(6, max(1, level)) }
+ 
+-    private static func systemFont(preset: TypographyConfig.BodyPreset, size: CGFloat, weight: NSFont.Weight) -> NSFont {
+-        let base = NSFont.systemFont(ofSize: size, weight: weight)
++    private static func systemFont(preset: TypographyConfig.BodyPreset, size: CGFloat, weight: PlatformFont.Weight) -> PlatformFont {
++        let base = PlatformFont.systemFont(ofSize: size, weight: weight)
+         guard preset == .reading else { return base }  // Working = SF Pro Text
+         // Reading = New York, reached through the descriptor's serif design
+         // rather than by family name, so it tracks whatever Apple ships.
+         guard let descriptor = base.fontDescriptor.withDesign(.serif),
+-              let serif = NSFont(descriptor: descriptor, size: size)
++              let serif = platformFont(descriptor: descriptor, size: size)
+         else { return base }
+         return serif
+     }
+ 
+-    private static func monoFont(family: String, size: CGFloat, ligatures: Bool) -> NSFont {
++    private static func monoFont(family: String, size: CGFloat, ligatures: Bool) -> PlatformFont {
+         // SF Mono is not installed on every machine and is not exposed under a
+         // single stable name, so the chain degrades: configured face, SF Mono
+         // under both of its names, Menlo, then the system monospace face.
+         let candidates = [family, "SF Mono", "SFMono-Regular", "Menlo"]
+-        var resolved: NSFont?
++        var resolved: PlatformFont?
+         for name in candidates where !name.isEmpty {
+-            if let font = NSFont(name: name, size: size) { resolved = font; break }
++            if let font = PlatformFont(name: name, size: size) { resolved = font; break }
+         }
+-        let font = resolved ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
++        let font = resolved ?? PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular)
+         return applyingLigatures(ligatures, to: font)
+     }
+ 
+-    private static func applyingLigatures(_ enabled: Bool, to font: NSFont) -> NSFont {
++    private static func applyingLigatures(_ enabled: Bool, to font: PlatformFont) -> PlatformFont {
+         guard !enabled else { return font }
+-        let settings: [[NSFontDescriptor.FeatureKey: Int]] = [
++        #if os(macOS)
++        let settings: [[PlatformFontDescriptor.FeatureKey: Int]] = [
+             [.typeIdentifier: Int(kLigaturesType), .selectorIdentifier: Int(kCommonLigaturesOffSelector)],
+             [.typeIdentifier: Int(kLigaturesType), .selectorIdentifier: Int(kRareLigaturesOffSelector)],
+             [.typeIdentifier: Int(kContextualAlternatesType), .selectorIdentifier: Int(kContextualAlternatesOffSelector)],
+         ]
++        #else
++        let settings: [[PlatformFontDescriptor.FeatureKey: Int]] = [
++            [.type: Int(kLigaturesType), .selector: Int(kCommonLigaturesOffSelector)],
++            [.type: Int(kLigaturesType), .selector: Int(kRareLigaturesOffSelector)],
++            [.type: Int(kContextualAlternatesType), .selector: Int(kContextualAlternatesOffSelector)],
++        ]
++        #endif
+         let descriptor = font.fontDescriptor.addingAttributes([.featureSettings: settings])
+-        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
++        return platformFont(descriptor: descriptor, size: font.pointSize) ?? font
+     }
+ 
+-    private static func applying(bold: Bool, italic: Bool, to font: NSFont) -> NSFont {
++    private static func applying(bold: Bool, italic: Bool, to font: PlatformFont) -> PlatformFont {
+         guard bold || italic else { return font }
+         var traits = font.fontDescriptor.symbolicTraits
++        #if os(macOS)
+         if bold { traits.insert(.bold) }
+         if italic { traits.insert(.italic) }
+         let descriptor = font.fontDescriptor.withSymbolicTraits(traits)
+-        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
++        #else
++        if bold { traits.insert(.traitBold) }
++        if italic { traits.insert(.traitItalic) }
++        guard let descriptor = font.fontDescriptor.withSymbolicTraits(traits) else { return font }
++        #endif
++        return platformFont(descriptor: descriptor, size: font.pointSize) ?? font
+     }
+ 
+     /// The mean advance over a prose sample.  The usual shortcut — the advance
+     /// of `0` — over-estimates badly for a proportional face, which is exactly
+     /// how measure caps end up 20% too wide (§11.1).
+-    private static func averageCharacterWidth(of font: NSFont) -> CGFloat {
++    private static func averageCharacterWidth(of font: PlatformFont) -> CGFloat {
+         let sample = Array("the quick brown fox jumps over the lazy dog, and then it did it again. ".utf16)
+         var glyphs = [CGGlyph](repeating: 0, count: sample.count)
+         guard CTFontGetGlyphsForCharacters(font as CTFont, sample, &glyphs, sample.count) else {
+@@ -336,7 +360,7 @@ public struct StyleSheet {
+     /// of the band where it still reads as the same size.
+     private static let mathFontXHeightRatio: CGFloat = 0.431
+ 
+-    private static func mathPointSize(body: NSFont, typography: TypographyConfig) -> CGFloat {
++    private static func mathPointSize(body: PlatformFont, typography: TypographyConfig) -> CGFloat {
+         let optical = body.xHeight / mathFontXHeightRatio
+         let clamped = min(max(optical, typography.bodySize * 0.90), typography.bodySize * 1.10)
+         return clamped * typography.mathScale
+@@ -362,7 +386,7 @@ public struct StyleSheet {
+ 
+     // MARK: - Colours
+ 
+-    public func headingColor(level: Int) -> NSColor { headingColors[StyleSheet.clampLevel(level) - 1] }
++    public func headingColor(level: Int) -> PlatformColor { headingColors[StyleSheet.clampLevel(level) - 1] }
+ 
+     /// Fourteen callout kinds share five palette slots, grouped by what the
+     /// reader is meant to *do*: absorb, act carefully, confirm, stop, or take
+@@ -373,7 +397,7 @@ public struct StyleSheet {
+     /// `caution` is graver than `warning`, and `important` is emphasis rather
+     /// than danger.  The HTML exporter already grouped `caution` with `danger`;
+     /// this is the renderer agreeing with it.
+-    public func calloutColor(_ kind: CalloutKind) -> NSColor {
++    public func calloutColor(_ kind: CalloutKind) -> PlatformColor {
+         switch kind {
+         case .note, .info, .abstract, .quote, .example: return calloutColors[0]
+         case .warning, .question, .todo: return calloutColors[1]
+@@ -402,7 +426,7 @@ public struct StyleSheet {
+         }
+     }
+ 
+-    public func changeColor(_ kind: ChangeKind) -> NSColor {
++    public func changeColor(_ kind: ChangeKind) -> PlatformColor {
+         switch kind {
+         case .inserted: return changeColors[0]
+         case .deleted: return changeColors[1]
+@@ -410,7 +434,7 @@ public struct StyleSheet {
+         }
+     }
+ 
+-    public func codeColor(_ token: SyntaxToken) -> NSColor { codeColors[token] ?? text }
++    public func codeColor(_ token: SyntaxToken) -> PlatformColor { codeColors[token] ?? text }
+ 
+     /// What a mark drawn *on* the accent must be painted in — the tick inside a
+     /// ticked checkbox, a glyph on an accent pill.
+@@ -421,8 +445,8 @@ public struct StyleSheet {
+     /// state in the app a reader could not see.  Picking whichever of the page
+     /// and its text stands further from the accent keeps the mark legible in
+     /// every theme without a per-theme token (§11.2).
+-    public var onAccent: NSColor {
+-        let distance = { (color: NSColor) in
++    public var onAccent: PlatformColor {
++        let distance = { (color: PlatformColor) in
+             abs(StyleSheet.relativeLuminance(color) - StyleSheet.relativeLuminance(accent))
+         }
+         return distance(background) >= distance(text) ? background : text
+@@ -444,7 +468,7 @@ public struct StyleSheet {
+     // the caret need on a page's worth of completed rows.
+ 
+     /// Wash behind a completed box.
+-    public var taskFieldColor: NSColor {
++    public var taskFieldColor: PlatformColor {
+         accent.panelAlpha(taskFieldAlpha, increaseContrast: increaseContrast)
+     }
+ 
+@@ -454,7 +478,7 @@ public struct StyleSheet {
+     /// from secondary text rather than from `rule`: a theme's rule colour is a
+     /// hairline meant to disappear (warm dark's is two steps off the page), and a
+     /// checkbox nobody can see is a checkbox nobody clicks.
+-    public func taskRingColor(checked: Bool) -> NSColor {
++    public func taskRingColor(checked: Bool) -> PlatformColor {
+         checked
+             ? accent.panelAlpha(0.55, increaseContrast: increaseContrast)
+             : textSecondary.panelAlpha(0.70, increaseContrast: increaseContrast)
+@@ -479,14 +503,14 @@ public struct StyleSheet {
+     /// because what reaches the screen is 0.9 of this colour, not all of it.
+     /// It is 0.9 rather than a hint because the tick is the only thing that
+     /// *states* the task is done.
+-    public var taskTickColor: NSColor {
++    public var taskTickColor: PlatformColor {
+         let field = ColorResolver.blend(background, accent, taskFieldAlpha)
+         let ratio = StyleSheet.contrastRatio(accent, field)
+         let base = ratio < 4 ? ColorResolver.blend(accent, text, 0.5) : accent
+         return base.panelAlpha(0.90, increaseContrast: increaseContrast)
+     }
+ 
+-    static func contrastRatio(_ a: NSColor, _ b: NSColor) -> CGFloat {
++    static func contrastRatio(_ a: PlatformColor, _ b: PlatformColor) -> CGFloat {
+         let first = relativeLuminance(a)
+         let second = relativeLuminance(b)
+         return (max(first, second) + 0.05) / (min(first, second) + 0.05)
+@@ -494,7 +518,7 @@ public struct StyleSheet {
+ 
+     /// WCAG relative luminance, on the sRGB components the resolver already
+     /// snapshotted.
+-    static func relativeLuminance(_ color: NSColor) -> CGFloat {
++    static func relativeLuminance(_ color: PlatformColor) -> CGFloat {
+         guard let srgb = color.usingColorSpace(.sRGB) else { return 0.5 }
+         let channel = { (value: CGFloat) -> CGFloat in
+             value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+@@ -505,8 +529,8 @@ public struct StyleSheet {
+     }
+ 
+     private static func codeColors(
+-        _ code: CodeTheme, text: NSColor, resolver: ColorResolver
+-    ) -> [SyntaxToken: NSColor] {
++        _ code: CodeTheme, text: PlatformColor, resolver: ColorResolver
++    ) -> [SyntaxToken: PlatformColor] {
+         [
+             .plain: text,
+             .keyword: resolver.resolve(code.keyword),
+@@ -536,9 +560,9 @@ public struct StyleSheet {
+ /// Snapshotting them here is what lets a `StyleSheet` be built off the drawing
+ /// path and still be right (§11.2).
+ struct ColorResolver {
+-    let appearance: NSAppearance
++    let appearance: PlatformAppearance
+ 
+-    func resolve(_ themeColor: ThemeColor) -> NSColor {
++    func resolve(_ themeColor: ThemeColor) -> PlatformColor {
+         ColorResolver.snapshot(themeColor.resolved(), in: appearance)
+     }
+ 
+@@ -546,13 +570,13 @@ struct ColorResolver {
+     /// secondary text, faint text, rules, markers — by pulling each a third of
+     /// the way toward the primary text colour.  Re-tinting the whole theme
+     /// would destroy a designed palette to solve a problem it does not have.
+-    func resolve(_ themeColor: ThemeColor, towards target: NSColor, if enabled: Bool) -> NSColor {
++    func resolve(_ themeColor: ThemeColor, towards target: PlatformColor, if enabled: Bool) -> PlatformColor {
+         let base = resolve(themeColor)
+         guard enabled else { return base }
+         return ColorResolver.blend(base, target, 1.0 / 3.0)
+     }
+ 
+-    private static func snapshot(_ color: NSColor, in appearance: NSAppearance) -> NSColor {
++    private static func snapshot(_ color: PlatformColor, in appearance: PlatformAppearance) -> PlatformColor {
+         var resolved = color
+         appearance.performAsCurrentDrawingAppearance {
+             resolved = color.usingColorSpace(.sRGB) ?? color
+@@ -560,10 +584,10 @@ struct ColorResolver {
+         return resolved
+     }
+ 
+-    static func blend(_ a: NSColor, _ b: NSColor, _ t: CGFloat) -> NSColor {
++    static func blend(_ a: PlatformColor, _ b: PlatformColor, _ t: CGFloat) -> PlatformColor {
+         guard let lhs = a.usingColorSpace(.sRGB), let rhs = b.usingColorSpace(.sRGB) else { return a }
+         let mix = min(max(t, 0), 1)
+-        return NSColor(
++        return PlatformColor(
+             srgbRed: lhs.redComponent + (rhs.redComponent - lhs.redComponent) * mix,
+             green: lhs.greenComponent + (rhs.greenComponent - lhs.greenComponent) * mix,
+             blue: lhs.blueComponent + (rhs.blueComponent - lhs.blueComponent) * mix,
+@@ -571,3 +595,11 @@ struct ColorResolver {
+         )
+     }
+ }
++
++extension PlatformColor {
++    /// Alpha that respects Increase Contrast (§11.4): a 12% tick that reads as
++    /// a hint at normal contrast has to become visible, not stay decorative.
++    public func panelAlpha(_ alpha: CGFloat, increaseContrast: Bool) -> PlatformColor {
++        withAlphaComponent(increaseContrast ? min(1, alpha * 1.8) : alpha)
++    }
++}
+diff --git a/Sources/MarkdownRender/Theme/ThemeStore.swift b/Sources/MarkdownRender/Theme/ThemeStore.swift
+index 3ef3ff6..79d3d56 100644
+--- a/Sources/MarkdownRender/Theme/ThemeStore.swift
++++ b/Sources/MarkdownRender/Theme/ThemeStore.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import Foundation
+ 
+ /// Themes: the six bundled ones, plus anything the user drops in
+diff --git a/Sources/MarkdownRender/Theme/ThemeValidation.swift b/Sources/MarkdownRender/Theme/ThemeValidation.swift
+index 2e22573..2c9a55c 100644
+--- a/Sources/MarkdownRender/Theme/ThemeValidation.swift
++++ b/Sources/MarkdownRender/Theme/ThemeValidation.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ 
+ public struct ThemeContrastFailure: Equatable, Sendable {
+     public let path: String
+@@ -21,11 +25,11 @@ public struct ThemeContrastFailure: Equatable, Sendable {
+ extension ThemeColor {
+     /// `nil` when `raw` is neither a parseable hex literal nor a known
+     /// `system:` colour name.
+-    public func validated() -> NSColor? {
++    public func validated() -> PlatformColor? {
+         if raw.hasPrefix("system:") {
+-            return NSColor.systemColorNamed(String(raw.dropFirst("system:".count)))
++            return PlatformColor.systemColorNamed(String(raw.dropFirst("system:".count)))
+         }
+-        return NSColor(hexString: raw)
++        return PlatformColor(hexString: raw)
+     }
+ 
+     public var isValid: Bool { validated() != nil }
+@@ -50,10 +54,10 @@ extension Theme {
+     /// renderer actually draws them. Decorative accents and intentionally
+     /// faint rail ticks are excluded; failing this list means body content,
+     /// links, headings, or code can become unreadable.
+-    public func semanticContrastFailures(appearance: NSAppearance? = nil) -> [ThemeContrastFailure] {
++    public func semanticContrastFailures(appearance: PlatformAppearance? = nil) -> [ThemeContrastFailure] {
+         let appearance = appearance ?? (self.appearance == .dark
+-            ? NSAppearance(named: .darkAqua)
+-            : NSAppearance(named: .aqua))
++            ? PlatformAppearance.platformDark
++            : PlatformAppearance.platformLight)
+         guard let appearance else { return [] }
+         let resolver = ColorResolver(appearance: appearance)
+         let roles: [(String, ThemeColor, ThemeColor, CGFloat)] = [
+@@ -93,7 +97,7 @@ extension Theme {
+ }
+ 
+ private enum ThemeContrast {
+-    static func ratio(foreground: NSColor, background: NSColor) -> CGFloat {
++    static func ratio(foreground: PlatformColor, background: PlatformColor) -> CGFloat {
+         let foreground = relativeLuminance(foreground)
+         let background = relativeLuminance(background)
+         let lighter = max(foreground, background)
+@@ -101,7 +105,7 @@ private enum ThemeContrast {
+         return (lighter + 0.05) / (darker + 0.05)
+     }
+ 
+-    private static func relativeLuminance(_ color: NSColor) -> CGFloat {
++    private static func relativeLuminance(_ color: PlatformColor) -> CGFloat {
+         let color = color.usingColorSpace(.sRGB) ?? color
+         func linear(_ component: CGFloat) -> CGFloat {
+             component <= 0.04045
+diff --git a/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift b/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift
+index f1c4448..1ba4d9e 100644
+--- a/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift
++++ b/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import Foundation
+ 
+ /// VS Code / Shiki theme import (§11.2).
+diff --git a/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift b/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift
+index ecaec26..f3fdcf4 100644
+--- a/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift
++++ b/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -445,3 +446,4 @@ private final class PreviewContentView: NSView {
+         needsDisplay = true
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/DensityGutterView.swift b/Sources/MarkdownRender/View/DensityGutterView.swift
+index 78453c0..198ce57 100644
+--- a/Sources/MarkdownRender/View/DensityGutterView.swift
++++ b/Sources/MarkdownRender/View/DensityGutterView.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -1736,3 +1737,4 @@ public final class DensityGutterView: Motion.SpringSurfaceView {
+         return found
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/DensityOutlineWindow.swift b/Sources/MarkdownRender/View/DensityOutlineWindow.swift
+index 12eb6c3..9ba420a 100644
+--- a/Sources/MarkdownRender/View/DensityOutlineWindow.swift
++++ b/Sources/MarkdownRender/View/DensityOutlineWindow.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ 
+ public struct DensityOutlineEntry: Equatable, Sendable {
+@@ -327,3 +328,4 @@ private final class OutlineBackdrop: NSVisualEffectView {
+         path.stroke()
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/FootnoteMarginView.swift b/Sources/MarkdownRender/View/FootnoteMarginView.swift
+index ac5bc66..71c5560 100644
+--- a/Sources/MarkdownRender/View/FootnoteMarginView.swift
++++ b/Sources/MarkdownRender/View/FootnoteMarginView.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -64,3 +65,4 @@ final class FootnoteMarginView: NSView {
+         }
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/FragmentProvider.swift b/Sources/MarkdownRender/View/FragmentProvider.swift
+index 0644838..d1c2140 100644
+--- a/Sources/MarkdownRender/View/FragmentProvider.swift
++++ b/Sources/MarkdownRender/View/FragmentProvider.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ 
+ /// Chooses the `NSTextLayoutFragment` subclass for every paragraph.
+diff --git a/Sources/MarkdownRender/View/GutterRailView.swift b/Sources/MarkdownRender/View/GutterRailView.swift
+index 7abac57..506083c 100644
+--- a/Sources/MarkdownRender/View/GutterRailView.swift
++++ b/Sources/MarkdownRender/View/GutterRailView.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -453,3 +454,4 @@ private extension NSBezierPath {
+         fill()
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/MarkdownContainerView.swift b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+index 4362d18..2d13359 100644
+--- a/Sources/MarkdownRender/View/MarkdownContainerView.swift
++++ b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+@@ -1,5 +1,6 @@
+ // Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ // Original file by the Downright contributors (MIT); see git history for the changes.
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -313,3 +314,4 @@ public final class MarkdownContainerView: NSView {
+     }
+ 
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/MarkdownContentStorage.swift b/Sources/MarkdownRender/View/MarkdownContentStorage.swift
+index 4ad1557..625273f 100644
+--- a/Sources/MarkdownRender/View/MarkdownContentStorage.swift
++++ b/Sources/MarkdownRender/View/MarkdownContentStorage.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ 
+ private final class MarkdownTextParagraph: NSTextParagraph {
+     private let contentRange: NSTextRange
+diff --git a/Sources/MarkdownRender/View/MarkdownSmartPaste.swift b/Sources/MarkdownRender/View/MarkdownSmartPaste.swift
+index 2e5a836..48d941a 100644
+--- a/Sources/MarkdownRender/View/MarkdownSmartPaste.swift
++++ b/Sources/MarkdownRender/View/MarkdownSmartPaste.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -242,3 +243,4 @@ public extension NSPasteboard.PasteboardType {
+     static let webArchive = NSPasteboard.PasteboardType("Apple Web Archive pasteboard type")
+     static let appleWebArchive = NSPasteboard.PasteboardType("com.apple.webarchive")
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+index 1aa8191..d88bd5c 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+@@ -1,5 +1,6 @@
+ // Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ // Original file by the Downright contributors (MIT); see git history for the changes.
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -674,25 +675,7 @@ extension MarkdownTextView {
+ 
+     private func codeText(of payload: FragmentPayload) -> String {
+         guard let storage = textStorage else { return "" }
+-        var range = payload.sourceRange
+-        range.location = max(0, range.location)
+-        range.length = min(range.length, storage.length - range.location)
+-        guard range.length > 0 else { return "" }
+-        // Strip the fences: what you want on the pasteboard is the code.
+-        let lines = storage.attributedSubstring(from: range).string
+-            .components(separatedBy: "\n")
+-        var body = lines
+-        // Tilde fences are as valid as backtick fences and the parser accepts
+-        // both, so the pasteboard has to recognise both.
+-        func isFence(_ line: String?) -> Bool {
+-            guard let trimmed = line?.trimmingCharacters(in: .whitespaces),
+-                  let marker = trimmed.first, marker == "`" || marker == "~" else { return false }
+-            return trimmed.prefix(while: { $0 == marker }).count >= 3
+-        }
+-        if isFence(body.first) { body.removeFirst() }
+-        if isFence(body.last) { body.removeLast() }
+-        if body.last?.isEmpty == true { body.removeLast() }
+-        return body.joined(separator: "\n")
++        return CodeBlockFragment.codeText(of: payload, in: storage)
+     }
+ 
+     // MARK: - Context menus (§7.1)
+@@ -1710,3 +1693,4 @@ extension MarkdownTextView {
+         }
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/MarkdownTextView.swift b/Sources/MarkdownRender/View/MarkdownTextView.swift
+index 5b86357..4947fa2 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextView.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextView.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -467,6 +468,7 @@ public final class MarkdownTextView: NSTextView {
+     /// the scroll observer remains a fallback for a user-initiated move.
+     private var pendingShrinkRepair = false
+     private var pendingShrinkRepairWorkItem: DispatchWorkItem?
++    private let layoutMapBuilder = LayoutMapBuilder()
+     private var applyingPendingShrinkRepair = false
+     /// Coalesced scroll handler: during a momentum scroll the bounds change
+     /// notification fires 30–60×/s, but the gutter, breadcrumb, and density
+@@ -1373,77 +1375,20 @@ public final class MarkdownTextView: NSTextView {
+     }
+ 
+     private func rebuildBaseDisplayMap(document: ParsedDocument) {
+-        var hidden = engine.hiddenRanges(document: document, caret: nil, selections: [])
+-        if let focus = sourceFocus.range {
+-            hidden.removeAll { NSIntersectionRange($0, focus).length > 0 }
+-        }
+-        let lineBreakSubstitutions = effectivePolicy.rendersFragments
+-            ? Self.safeHTMLLineBreakSubstitutions(in: document, excluding: sourceFocus.range)
+-            : []
+-        if !lineBreakSubstitutions.isEmpty {
+-            hidden = Self.removingOverlaps(
+-                hidden, with: lineBreakSubstitutions.map(\.sourceRange)
+-            )
+-        }
+-
+-        let mathRanges = effectivePolicy.rendersFragments
+-            ? InlineMathDisplay.ranges(in: document).filter { range in
+-                guard let focus = sourceFocus.range else { return true }
+-                return NSIntersectionRange(range, focus).length == 0
+-            }
+-            : []
+-        // The math replacement owns its delimiters and content as one visual
+-        // object. Keeping the marker substitutions too would overlap the
+-        // object range, causing DisplayMap to reject one of the entries.
+-        hidden = Self.removingOverlaps(hidden, with: mathRanges)
+-        let mathSubstitutions = effectivePolicy.rendersFragments
+-            ? InlineMathDisplay.substitutions(
+-                in: document, styleSheet: styleSheet, excluding: sourceFocus.range)
+-            : []
+-
+-        let footnoteReferences = effectivePolicy.hidesInlineMarkers
+-            ? FootnoteReferenceDisplay.references(in: document).filter { reference in
+-                guard let focus = sourceFocus.range else { return true }
+-                return NSIntersectionRange(reference.range, focus).length == 0
+-            }
+-            : []
+-        hidden = Self.removingOverlaps(hidden, with: footnoteReferences.map(\.range))
+-        let footnoteSubstitutions = effectivePolicy.hidesInlineMarkers
+-            ? FootnoteReferenceDisplay.substitutions(
+-                in: document, styleSheet: styleSheet, excluding: sourceFocus.range
+-            )
+-            : []
+-
+-        baseHiddenRanges = hidden
+-        let source = (textStorage?.string ?? "") as NSString
+-        let plan: HardWrapReflow.Plan
+-        if configuration.reflowHardWrappedParagraphs,
+-           Self.containsHardWrappedParagraph(in: document, text: source) {
+-            plan = HardWrapReflow.plan(
+-                document: document,
+-                text: source,
+-                hiddenRanges: hidden,
+-                enabled: true
+-            )
+-        } else {
+-            // Most generated large documents use one physical line per
+-            // paragraph. HardWrapReflow still walks every character in every
+-            // paragraph in that case, even though it cannot publish a
+-            // substitution. Avoid that whole-document pass during a wholesale
+-            // commit while preserving reflow for documents that actually have
+-            // wrapped paragraphs.
+-            plan = HardWrapReflow.Plan(ranges: [], substitutions: [])
+-        }
+-        hardWrapRanges = plan.ranges
+-        hardWrapSubstitutions = plan.substitutions.filter(\.isHardWrapReflow)
+-        baseDisplayMap = DisplayMap(
+-            paragraphs: paragraphIndex,
+-            substitutions: hidden.map(DisplaySubstitution.hide)
+-                + mathSubstitutions
+-                + footnoteSubstitutions
+-                + lineBreakSubstitutions
+-                + hardWrapSubstitutions
++        let maps = PresentationMaps.base(
++            document: document,
++            engine: engine,
++            styleSheet: styleSheet,
++            policy: effectivePolicy,
++            excluding: sourceFocus.range,
++            reflowHardWrappedParagraphs: configuration.reflowHardWrappedParagraphs,
++            text: (textStorage?.string ?? "") as NSString,
++            paragraphIndex: paragraphIndex
+         )
++        baseHiddenRanges = maps.hidden
++        hardWrapRanges = maps.hardWrapRanges
++        hardWrapSubstitutions = maps.hardWrapSubstitutions
++        baseDisplayMap = maps.logical
+         // Selection / hit-testing speak TextKit coordinates from the layout map
+         // (length-preserving joiners). Collapsed logical maps stay on the
+         // substitution fallback path only.
+@@ -1451,183 +1396,10 @@ public final class MarkdownTextView: NSTextView {
+         displayMap = baseLayoutMap
+     }
+ 
+-    /// Hard-wrap planning is only meaningful when a paragraph contains a
+-    /// physical line break. Checking that invariant once is linear in source
+-    /// length and avoids a much more expensive character walk through every
+-    /// single-line paragraph in a large generated document.
+-    private static func containsHardWrappedParagraph(
+-        in document: ParsedDocument,
+-        text: NSString
+-    ) -> Bool {
+-        var found = false
+-        document.root.walk { block in
+-            guard !found, case .paragraph = block.content, block.range.length > 0 else { return }
+-            found = text.rangeOfCharacter(
+-                from: .newlines,
+-                options: [],
+-                range: block.range
+-            ).location != NSNotFound
+-        }
+-        return found
+-    }
+-
+-    /// Presents safe README structural tags with source-preserving display
+-    /// replacements. The trailing zero-width joiners keep TextKit source
+-    /// offsets one-to-one with the replacement, so selection, editing, and
+-    /// copying continue to address the original tag bytes. Details gets its
+-    /// authored disclosure state at the opening tag; table rows get a line
+-    /// break at their closing tag so adjacent cells/rows cannot concatenate.
+-    private static func safeHTMLLineBreakSubstitutions(
+-        in document: ParsedDocument,
+-        excluding excludedRange: NSRange?
+-    ) -> [DisplaySubstitution] {
+-        var substitutions: [DisplaySubstitution] = []
+-        document.root.walk { block in
+-            guard let html = block.safeHTML, html.isSafe else { return }
+-            for annotation in html.annotations {
+-                let replacementRange: NSRange
+-                let replacementText: String
+-                switch annotation.kind {
+-                case .lineBreak:
+-                    guard annotation.range.length > 0 else { continue }
+-                    replacementRange = annotation.range
+-                    replacementText = "\n"
+-                case .details:
+-                    // Replace only the opening tag, not the content. This
+-                    // gives both open and closed details a stable native
+-                    // disclosure marker without changing source bytes.
+-                    guard let opening = annotation.tagRanges.first,
+-                          opening.length > 0 else { continue }
+-                    replacementRange = opening
+-                    if case .details(let open) = annotation.kind {
+-                        replacementText = open ? "▾" : "▸"
+-                    } else {
+-                        continue
+-                    }
+-                case .tableRow:
+-                    // Rows are often emitted without physical newlines in
+-                    // README HTML. A break on the closing tag keeps the row
+-                    // model legible while preserving source coordinates.
+-                    guard let closing = annotation.tagRanges.last,
+-                          closing.length > 0 else { continue }
+-                    replacementRange = closing
+-                    replacementText = "\n"
+-                default:
+-                    continue
+-                }
+-                if let excludedRange,
+-                   NSIntersectionRange(replacementRange, excludedRange).length > 0 {
+-                    continue
+-                }
+-                let replacement = NSAttributedString(string:
+-                    replacementText + String(repeating: "\u{200B}", count: replacementRange.length - 1)
+-                )
+-                substitutions.append(DisplaySubstitution(
+-                    sourceRange: replacementRange,
+-                    displayLength: replacementRange.length,
+-                    replacement: replacement,
+-                    preservesSourceOffsets: true
+-                ))
+-            }
+-        }
+-        return substitutions.sorted { $0.sourceRange.location < $1.sourceRange.location }
+-    }
+-
+-    /// Removes ranges intersecting an ordered exclusion set in one merge pass.
+-    /// The old nested `contains` walk made a document with inline math in every
+-    /// paragraph quadratic while rebuilding its display map.
+-    private static func removingOverlaps(_ ranges: [NSRange], with exclusions: [NSRange]) -> [NSRange] {
+-        guard !ranges.isEmpty, !exclusions.isEmpty else { return ranges }
+-        let orderedRanges = ranges.sorted { $0.location < $1.location }
+-        let orderedExclusions = exclusions.sorted { $0.location < $1.location }
+-        var kept: [NSRange] = []
+-        kept.reserveCapacity(orderedRanges.count)
+-        var exclusionIndex = 0
+-        for range in orderedRanges {
+-            while exclusionIndex < orderedExclusions.count,
+-                  orderedExclusions[exclusionIndex].upperBound <= range.location {
+-                exclusionIndex += 1
+-            }
+-            let overlaps = exclusionIndex < orderedExclusions.count
+-                && orderedExclusions[exclusionIndex].location < range.upperBound
+-                && orderedExclusions[exclusionIndex].upperBound > range.location
+-            if !overlaps { kept.append(range) }
+-        }
+-        return kept
+-    }
+-
+     /// TextKit 2 elements keep source-length ranges even when Markdown syntax
+-    /// is visually omitted. Hidden runs become zero-width word joiners here;
+-    /// the logical map used by marker policy still collapses them for semantic
+-    /// selection and reveal decisions.
++    /// is visually omitted; see `LayoutMapBuilder`.
+     private func layoutDisplayMap(from logical: DisplayMap) -> DisplayMap {
+-        let substitutions = logical.substitutions.map(layoutSubstitution)
+-        return DisplayMap(paragraphs: paragraphIndex, substitutions: substitutions)
+-    }
+-
+-    /// One logical substitution in layout space.  Kept separate from the map so
+-    /// a paragraph-local reveal can transform only its own handful of entries.
+-    private func layoutSubstitution(_ substitution: DisplaySubstitution) -> DisplaySubstitution {
+-        guard !substitution.isHidden,
+-              let replacement = substitution.replacement,
+-              replacement.length < substitution.sourceRange.length,
+-              replacement.attribute(.attachment, at: 0, effectiveRange: nil) != nil else {
+-            guard substitution.isHidden else { return substitution }
+-            let length = substitution.sourceRange.length
+-            return DisplaySubstitution(
+-                sourceRange: substitution.sourceRange,
+-                displayLength: length,
+-                replacement: layoutFiller(length: length, styledLike: substitution.sourceRange.location),
+-                isHidden: true,
+-                preservesSourceOffsets: true
+-            )
+-        }
+-        let fillerCount = substitution.sourceRange.length - replacement.length
+-        let layoutReplacement = NSMutableAttributedString(attributedString: replacement)
+-        layoutReplacement.append(
+-            layoutFiller(length: fillerCount, styledLike: substitution.sourceRange.location)
+-        )
+-        return DisplaySubstitution(
+-            sourceRange: substitution.sourceRange,
+-            displayLength: substitution.sourceRange.length,
+-            replacement: layoutReplacement,
+-            preservesSourceOffsets: true
+-        )
+-    }
+-
+-    /// A run of `length` word joiners carrying the storage's own attributes at
+-    /// `offset`.
+-    ///
+-    /// Reading those attributes with `storage.attributes(at:)` and handing them
+-    /// to `NSAttributedString(string:attributes:)` bridges one attribute
+-    /// dictionary out of Objective-C and straight back into it, per hidden
+-    /// marker, on every keystroke.  On a 5,000-line document that round trip
+-    /// measured as most of the keystroke budget, and it buys nothing:
+-    /// `attributedSubstring` hands back the storage's own dictionary without
+-    /// bridging, and `replaceCharacters` extends the first replaced character's
+-    /// attributes over the whole replacement.
+-    private func layoutFiller(length: Int, styledLike offset: Int) -> NSAttributedString {
+-        let joiners = wordJoiners(length)
+-        guard let storage = textStorage, offset >= 0, offset < storage.length else {
+-            return NSAttributedString(string: joiners)
+-        }
+-        let styled = NSMutableAttributedString(
+-            attributedString: storage.attributedSubstring(from: NSRange(location: offset, length: 1))
+-        )
+-        styled.replaceCharacters(in: NSRange(location: 0, length: 1), with: joiners)
+-        return styled
+-    }
+-
+-    /// Word-joiner runs by length.  A document uses the same handful of marker
+-    /// lengths over and over — `# `, `- [ ] `, a single `*` — so building the
+-    /// string once keeps the allocation off the keystroke path.
+-    private var wordJoinerRuns: [Int: String] = [:]
+-
+-    private func wordJoiners(_ length: Int) -> String {
+-        if let cached = wordJoinerRuns[length] { return cached }
+-        let run = String(repeating: "\u{2060}", count: max(0, length))
+-        wordJoinerRuns[length] = run
+-        return run
++        layoutMapBuilder.layoutDisplayMap(from: logical, paragraphs: paragraphIndex, storage: textStorage)
+     }
+ 
+     /// Source Focus changes typography and local material, never characters.
+@@ -2144,16 +1916,7 @@ public final class MarkdownTextView: NSTextView {
+     private func applyHiddenAttribute(_ hidden: [NSRange], scope: NSRange?, excluding: [NSRange] = []) {
+         guard let storage = textStorage, storage.length > 0 else { return }
+         let window = scope.flatMap { clampToStorage($0) } ?? NSRange(location: 0, length: storage.length)
+-        guard window.length > 0 else { return }
+-        storage.beginEditing()
+-        storage.removeAttribute(.drHidden, range: window)
+-        for range in RangeSet.intersecting(hidden, window) {
+-            storage.addAttribute(.drHidden, value: true, range: range)
+-        }
+-        for range in RangeSet.intersecting(excluding, window) {
+-            storage.removeAttribute(.drHidden, range: range)
+-        }
+-        storage.endEditing()
++        PresentationMaps.applyHiddenAttribute(hidden, to: storage, scope: window, excluding: excluding)
+     }
+ 
+     private func subtract(_ removed: [NSRange], from ranges: [NSRange]) -> [NSRange] {
+@@ -3577,3 +3340,4 @@ public final class MarkdownTextView: NSTextView {
+         )
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift b/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift
+index 51db951..2932b14 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ 
+@@ -145,3 +146,4 @@ public extension MarkdownTextViewDelegate {
+     func markdownTextView(_ view: MarkdownTextView, didAcceptDrop drop: DocumentDrop) -> Bool { false }
+     func markdownTextView(_ view: MarkdownTextView, wantsQuickLookFor target: ContextTarget) -> Bool { false }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/View/ParagraphSubstitution.swift b/Sources/MarkdownRender/View/ParagraphSubstitution.swift
+index ed8998b..f49a4cf 100644
+--- a/Sources/MarkdownRender/View/ParagraphSubstitution.swift
++++ b/Sources/MarkdownRender/View/ParagraphSubstitution.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ 
+ /// Marker hiding for the physical-paragraph fallback (§6.1).
+ ///
+diff --git a/Sources/MarkdownRender/View/StyleSheetDefaults.swift b/Sources/MarkdownRender/View/StyleSheetDefaults.swift
+index 6524986..c140d19 100644
+--- a/Sources/MarkdownRender/View/StyleSheetDefaults.swift
++++ b/Sources/MarkdownRender/View/StyleSheetDefaults.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ 
+ extension StyleSheet {
+@@ -34,11 +35,4 @@ enum GutterChrome {
+         Motion.run(reduceMotion: reduceMotion, duration: duration, changes: body, completion: completion)
+     }
+ }
+-
+-extension NSColor {
+-    /// Alpha that respects Increase Contrast (§11.4): a 12% tick that reads as
+-    /// a hint at normal contrast has to become visible, not stay decorative.
+-    public func panelAlpha(_ alpha: CGFloat, increaseContrast: Bool) -> NSColor {
+-        withAlphaComponent(increaseContrast ? min(1, alpha * 1.8) : alpha)
+-    }
+-}
++#endif
+diff --git a/Sources/MarkdownRender/View/TrackingArea.swift b/Sources/MarkdownRender/View/TrackingArea.swift
+index 4eb7c56..8ac1a1b 100644
+--- a/Sources/MarkdownRender/View/TrackingArea.swift
++++ b/Sources/MarkdownRender/View/TrackingArea.swift
+@@ -1,3 +1,4 @@
++#if os(macOS)
+ import AppKit
+ 
+ extension NSView {
+@@ -18,3 +19,4 @@ extension NSView {
+         area = replacement
+     }
+ }
++#endif
+diff --git a/Sources/MarkdownRender/_bootstrap.swift b/Sources/MarkdownRender/_bootstrap.swift
+index b46f752..55c9a54 100644
+--- a/Sources/MarkdownRender/_bootstrap.swift
++++ b/Sources/MarkdownRender/_bootstrap.swift
+@@ -1 +1,5 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+diff --git a/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift b/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift
+index 2bfb64f..ca6ed5e 100644
+--- a/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift
++++ b/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import Testing
+ 
+ @testable import MarkdownRender
+@@ -9,6 +13,7 @@ struct BoundedImageCacheTests {
+     private func makeTestImage() throws -> URL {
+         let url = FileManager.default.temporaryDirectory
+             .appendingPathComponent("downright-image-cache-\(UUID().uuidString).png")
++        #if os(macOS)
+         let image = NSImage(size: NSSize(width: 4, height: 4))
+         image.lockFocus()
+         NSColor.white.setFill()
+@@ -19,6 +24,12 @@ struct BoundedImageCacheTests {
+               let png = rep.representation(using: .png, properties: [:]) else {
+             throw CocoaError(.fileWriteUnknown)
+         }
++        #else
++        let png = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).pngData { context in
++            UIColor.white.setFill()
++            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
++        }
++        #endif
+         try png.write(to: url)
+         return url
+     }
+diff --git a/Tests/MarkdownRenderTests/CalloutGeometryTests.swift b/Tests/MarkdownRenderTests/CalloutGeometryTests.swift
+index fc0c02c..0f2ad7f 100644
+--- a/Tests/MarkdownRenderTests/CalloutGeometryTests.swift
++++ b/Tests/MarkdownRenderTests/CalloutGeometryTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -155,3 +157,4 @@ struct CalloutGeometryTests {
+                 "callout body indent \(calloutBody ?? -1) is not the icon column")
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/ClickStabilityTests.swift b/Tests/MarkdownRenderTests/ClickStabilityTests.swift
+index 2d0c0e0..6ece12e 100644
+--- a/Tests/MarkdownRenderTests/ClickStabilityTests.swift
++++ b/Tests/MarkdownRenderTests/ClickStabilityTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -295,3 +297,4 @@ struct ClickStabilityTests {
+     }
+ 
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift b/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift
+index e5cadeb..cea8fff 100644
+--- a/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift
++++ b/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Testing
+ 
+@@ -97,3 +99,4 @@ struct ClipboardSemanticHTMLTests {
+                 == .html("<p>Archive</p>", fallback: ""))
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift b/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift
+index 0597ee1..e902895 100644
+--- a/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift
++++ b/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -221,3 +223,4 @@ struct CodeBlockGeometryTests {
+         }
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/ContentResizeTests.swift b/Tests/MarkdownRenderTests/ContentResizeTests.swift
+index 3f6c075..b2f406c 100644
+--- a/Tests/MarkdownRenderTests/ContentResizeTests.swift
++++ b/Tests/MarkdownRenderTests/ContentResizeTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -483,3 +485,4 @@ struct ContentResizeTests {
+         #expect(abs(documentAfter - before) < 2, "Document mode moved the reading position")
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift b/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift
+index b989931..9ba0baf 100644
+--- a/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift
++++ b/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import Foundation
+ import Testing
+ 
+diff --git a/Tests/MarkdownRenderTests/DecorationTests.swift b/Tests/MarkdownRenderTests/DecorationTests.swift
+index 30352e2..ed5cb75 100644
+--- a/Tests/MarkdownRenderTests/DecorationTests.swift
++++ b/Tests/MarkdownRenderTests/DecorationTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -1311,3 +1313,4 @@ func lengthChangingEditKeepsDownstreamFragmentRangesAlignedUntilParse() throws {
+     #expect(RangeSet.intersecting(normalized, NSRange(location: 4, length: 8))
+             == [NSRange(location: 4, length: 2), NSRange(location: 10, length: 2)])
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/DensityRailTests.swift b/Tests/MarkdownRenderTests/DensityRailTests.swift
+index 1a5e7b0..6f03d36 100644
+--- a/Tests/MarkdownRenderTests/DensityRailTests.swift
++++ b/Tests/MarkdownRenderTests/DensityRailTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -720,3 +722,4 @@ struct DensityRailTests {
+         #expect(loudTaps > 0)
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift b/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift
+index d20bd9c..f5e4972 100644
+--- a/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift
++++ b/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -499,3 +501,4 @@ struct DropAndQuickLookTests {
+         #expect(view.quickLookTargetAtSelection() == nil)
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/GeometryProbeTests.swift b/Tests/MarkdownRenderTests/GeometryProbeTests.swift
+index 361e48b..46d7258 100644
+--- a/Tests/MarkdownRenderTests/GeometryProbeTests.swift
++++ b/Tests/MarkdownRenderTests/GeometryProbeTests.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import Foundation
+ import MarkdownCore
+ import Testing
+@@ -194,7 +198,7 @@ import Testing
+         latex: formula,
+         display: true,
+         pointSize: 16,
+-        color: .labelColor)
++        color: PlatformColor.systemColorNamed("label")!)
+     #expect(image != nil, "common operator wrappers should not fall back to raw LaTeX")
+ }
+ 
+diff --git a/Tests/MarkdownRenderTests/LayoutFillerTests.swift b/Tests/MarkdownRenderTests/LayoutFillerTests.swift
+index 7e81284..65c0141 100644
+--- a/Tests/MarkdownRenderTests/LayoutFillerTests.swift
++++ b/Tests/MarkdownRenderTests/LayoutFillerTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ @testable import MarkdownRender
+@@ -142,3 +144,4 @@ func caretMoveLeavesOtherParagraphFillersIntact() {
+     // The reveal drops entries, never adds them.
+     #expect(after.count <= before.count)
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/ListOrnamentTests.swift b/Tests/MarkdownRenderTests/ListOrnamentTests.swift
+index 79b6d64..d579fce 100644
+--- a/Tests/MarkdownRenderTests/ListOrnamentTests.swift
++++ b/Tests/MarkdownRenderTests/ListOrnamentTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -189,3 +191,4 @@ struct ListOrnamentTests {
+         #expect(!Self.isStruckThrough(container, "other"))
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift b/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift
+index d6abea1..3f260c1 100644
+--- a/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift
++++ b/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift
+@@ -1,4 +1,10 @@
++// Pixel probes read NSBitmapImageRep; no iOS counterpart yet.
++#if os(macOS)
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import Foundation
+ import Testing
+ import MarkdownCore
+@@ -212,3 +218,4 @@ private func dumpForInspection(_ image: NSImage, name: String) {
+     try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+     try? png.write(to: url)
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/MotionSystemTests.swift b/Tests/MarkdownRenderTests/MotionSystemTests.swift
+index 3fda2ec..3cc9a90 100644
+--- a/Tests/MarkdownRenderTests/MotionSystemTests.swift
++++ b/Tests/MarkdownRenderTests/MotionSystemTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import Testing
+@@ -259,3 +261,4 @@ struct MotionSystemTests {
+         #expect(Motion.scrollDuration(for: -100) == 0.18)
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift b/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift
+index 62303ae..f496fde 100644
+--- a/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift
++++ b/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -799,3 +801,4 @@ private func composite(_ color: NSColor, over background: NSColor) -> NSColor {
+     }
+     return out
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift b/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift
+index cac25ce..388d352 100644
+--- a/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift
++++ b/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ import Testing
+@@ -130,3 +132,4 @@ struct SafeHTMLLineBreakTests {
+         }
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift b/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
+index 8f3b0ce..714ef74 100644
+--- a/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
++++ b/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
+@@ -1,4 +1,8 @@
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import MarkdownCore
+ import Testing
+ @testable import MarkdownRender
+diff --git a/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift b/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift
+index 488a55e..e02a29c 100644
+--- a/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift
++++ b/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import Foundation
+ import MarkdownCore
+@@ -421,3 +423,4 @@ struct SmartPasteIntegrationTests {
+         }
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/SmartPasteTests.swift b/Tests/MarkdownRenderTests/SmartPasteTests.swift
+index 4ccd8b8..e16656f 100644
+--- a/Tests/MarkdownRenderTests/SmartPasteTests.swift
++++ b/Tests/MarkdownRenderTests/SmartPasteTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import Foundation
+ import MarkdownCore
+ import Testing
+@@ -73,3 +75,4 @@ import Testing
+             for: NSRange(location: 0, length: 6), in: document, mode: .source) == .plain)
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift b/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift
+index c142533..fcf30f8 100644
+--- a/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift
++++ b/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ import Testing
+@@ -118,3 +120,4 @@ private final class FrontMatterActivationProbe: MarkdownTextViewDelegate {
+         activations += 1
+     }
+ }
++#endif
+diff --git a/Tests/MarkdownRenderTests/ThemeTests.swift b/Tests/MarkdownRenderTests/ThemeTests.swift
+index a139943..dcaf88e 100644
+--- a/Tests/MarkdownRenderTests/ThemeTests.swift
++++ b/Tests/MarkdownRenderTests/ThemeTests.swift
+@@ -1,6 +1,10 @@
+ // Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ // Original file by the Downright contributors (MIT); see git history for the changes.
++#if os(macOS)
+ import AppKit
++#else
++import UIKit
++#endif
+ import Foundation
+ import MarkdownCore
+ import Testing
+@@ -415,7 +419,7 @@ final class ThemeTests {
+     func invalidColourIsDetectable() {
+         let broken = ThemeColor("#ggg")
+         #expect(broken.validated() == nil)
+-        #expect(broken.resolved() == .labelColor)
++        #expect(broken.resolved() == PlatformColor.systemColorNamed("label")!)
+         #expect(ThemeColor("system:notAColour").validated() == nil)
+         #expect(ThemeColor("system:controlAccentColor").validated() != nil)
+         #expect(ThemeColor("#11223344").validated() != nil)
+diff --git a/Tests/MarkdownRenderTests/TypingInvalidationTests.swift b/Tests/MarkdownRenderTests/TypingInvalidationTests.swift
+index e845c97..54e822d 100644
+--- a/Tests/MarkdownRenderTests/TypingInvalidationTests.swift
++++ b/Tests/MarkdownRenderTests/TypingInvalidationTests.swift
+@@ -1,3 +1,5 @@
++// The AppKit view layer has no iOS counterpart yet.
++#if os(macOS)
+ import AppKit
+ import MarkdownCore
+ @testable import MarkdownRender
+@@ -222,3 +224,4 @@ private final class TextStorageEditProbe: NSObject, NSTextStorageDelegate {
+         MainActor.assumeIsolated { attributeEdits.append(editedRange) }
+     }
+ }
++#endif

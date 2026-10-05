@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 08:25:50 -0400
+Subject: [PATCH 3/6] Show images inside a line of text on iOS
+
+Images that share a line with text or other markup (README badges,
+[![badge](...)](...), an <img> inside <a> or <p>) could not be block
+fragments, so they rendered as alt text or inert HTML source. The iOS
+reader now passes an InlineImageContext to PresentationMaps, and
+InlineImageDisplay replaces each such image's source span with an
+attachment, the way inline math is drawn. The source is untouched; alt
+text stands in until a picture loads or if it never does; an image inside
+a link keeps the link. Arrivals coalesce into one rebuild that keeps the
+scroll position, and a column change refits the pictures.
+
+The Mac passes no context, so its rendering is unchanged. Also marks
+RemoteImageLoader.maximumBytes nonisolated (a Swift 6 warning).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ AGENTS.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 5555f7d..631b296 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -33,7 +33,7 @@ This file contains Downright-specific context, invariants, and evidence gates. F
+ 
+ - For code changes, use focused tests while iterating, then run `Scripts/check.sh` as the authoritative source gate. For documentation-only changes, inspect content, links, and referenced commands without rebuilding the app. Do not substitute bare `swift test`; zero executed tests or a masked pipeline failure is a failed gate.
+ - When a change touches `MarkdownCore` or the shared (non-`View/`) half of `MarkdownRender`, also run `Scripts/check-ios.sh`. It requires Xcode and builds for iOS devices and the simulator. It also generates and tests the read-only iOS app in `iOSApp/` when XcodeGen is installed. It does not replace `Scripts/check.sh`. The iOS app is not a release surface: nothing in `Docs/RELEASE.md` covers it. Shared code names platform types through `MarkdownRender/Platform/Platform.swift`, not `NSColor`/`NSFont`/`NSImage` directly.
+-- Remote images: `MarkdownCore` and `MarkdownRender` never make network requests. `https:` images render only through a `RemoteImageLoading` a host installs on its view; the Mac app and Quick Look never install one, so there they stay blocked or inert. The iOS app installs its loader while Settings › Apps › Downright › Load Remote Images is on (the default): cookie-free, size- and time-limited fetches, with SVG drawn in an off-screen, script-free WebKit view.
++- Remote images: `MarkdownCore` and `MarkdownRender` never make network requests. `https:` images render only through a `RemoteImageLoading` a host installs on its view; the Mac app and Quick Look never install one, so there they stay blocked or inert. The iOS app installs its loader while Settings › Apps › Downright › Load Remote Images is on (the default): cookie-free, size- and time-limited fetches, with SVG drawn by a hidden, script-free WebKit view. Images inside a line of text (badges, `[![…](…)](…)`) are presented only by the iOS reader, through `InlineImageDisplay`'s display substitutions; the Mac passes no inline image context, so its rendering of them is unchanged.
+ - Give concurrent checks unique scratch/build locations using the supported variables: `SCRATCH`, `TEST_SCRATCH`, `APP_ACCEPTANCE_SCRATCH`, `SPOTLIGHT_SCRATCH`, and `IOS_SCRATCH` (for `Scripts/check-ios.sh`). Release benchmarks default to `${SCRATCH}-bench`; `BENCH_SCRATCH` can override that location. If source, `HEAD`, or relevant outputs change during validation, discard the result and rerun on the intended snapshot.
+ - `Scripts/bundle-app.sh` is appropriate for host-only iteration but does not prove Finder extensions. Use `Scripts/bundle-xcode-app.sh` and `Scripts/check-app.sh` for Quick Look, thumbnails, Finder integration, or production-shaped app acceptance. Development/ad-hoc bundles do not prove production Sparkle behavior. Every nested Mach-O must support all architectures of its host; universal release archives must include Intel and Apple Silicon CLI and Spotlight binaries.
+ - When the installed app is the acceptance surface, install the intended artifact explicitly with `APP_SOURCE=... Scripts/install.sh`, stop stale Downright instances when safe, and verify bundle path, version/build, executable identity, signature, embedded components, and running process before exercising the feature.

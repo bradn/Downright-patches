@@ -1,0 +1,178 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 09:02:04 -0400
+Subject: [PATCH 2/3] Comment the width patch against upstream's original
+ behaviour
+
+Each change now says what v1.0.16 did and why it changed: the four
+68-72 clamps (stylesheet, container, profiles, Settings stepper), the
+container forcing 72 above 1200pt, Quick Look ignoring the measure, the
+checkbox sample clamp, and install.sh's undefined STAGED_APP. Comments
+only.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ Scripts/install.sh                                     |  3 +++
+ .../DownrightApp/App/PreferencesWindowController.swift |  3 +++
+ .../DownrightApp/Panels/ReaderProfilePickerView.swift  |  5 +++--
+ Sources/DownrightApp/Support/Preferences.swift         |  2 ++
+ Sources/DownrightApp/Support/ReaderProfiles.swift      |  2 ++
+ Sources/DownrightQL/PreviewViewController.swift        |  4 ++++
+ Sources/MarkdownRender/Theme/PreviewAppearance.swift   |  2 ++
+ Sources/MarkdownRender/Theme/StyleSheet.swift          |  3 +++
+ .../MarkdownRender/View/MarkdownContainerView.swift    | 10 +++++++---
+ .../View/MarkdownTextView+Interaction.swift            |  7 +++++--
+ 10 files changed, 34 insertions(+), 7 deletions(-)
+
+diff --git a/Scripts/install.sh b/Scripts/install.sh
+index 53b7211..6576027 100755
+--- a/Scripts/install.sh
++++ b/Scripts/install.sh
+@@ -35,6 +35,9 @@ fi
+ echo "==> Installing to $APP_DEST"
+ DEST_PARENT="$(dirname "$APP_DEST")"
+ STAGE_ROOT="$(mktemp -d "$DEST_PARENT/.downright-install.XXXXXX")"
++# Local fix (width patch): upstream v1.0.16 uses STAGED_APP below but never
++# defines it, so under `set -u` the install aborted at the copy step with
++# "unbound variable" before touching /Applications.
+ STAGED_APP="$STAGE_ROOT/Downright.app"
+ # The backup of the outgoing app deliberately lives OUTSIDE the staging tree
+ # the exit trap deletes. Between "old app moved aside" and "new app in
+diff --git a/Sources/DownrightApp/App/PreferencesWindowController.swift b/Sources/DownrightApp/App/PreferencesWindowController.swift
+index aadba25..0cc966b 100644
+--- a/Sources/DownrightApp/App/PreferencesWindowController.swift
++++ b/Sources/DownrightApp/App/PreferencesWindowController.swift
+@@ -887,6 +887,9 @@ enum PreferencesForms {
+             .stepper("Line height", help: nil, range: 1.2...2.0, step: 0.05,
+                      get: { Double(Preferences.shared.values.typography.lineHeightMultiple) },
+                      set: { value in Preferences.shared.update { $0.typography.lineHeightMultiple = CGFloat(value) } }),
++            // Upstream offered 60...80 here, though the renderer clamped to
++            // 68–72, so 60–67 and 73–80 silently did nothing.  The stepper now
++            // spans exactly what the renderer honours (width patch).
+             .stepper("Measure (characters)",
+                      help: "How much text fits on a line before it wraps. Around 68 to 72 reads best. Larger values widen the column up to the window width.",
+                      range: Double(ReadingMeasure.minimumCharacters)...Double(ReadingMeasure.maximumCharacters), step: 1,
+diff --git a/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift b/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
+index 1f5848b..3300632 100644
+--- a/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
++++ b/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
+@@ -171,8 +171,9 @@ final class ReaderProfilePickerView: NSView, PanelSurface {
+         // As… away from the document for as long as the panel was open (§7.2).
+     }
+ 
+-    /// Measure presets.  The last one is wider than any window, so the column
+-    /// fills the window.
++    /// Measure presets.  Upstream offered only 68, 70 and 72 (width patch adds
++    /// the rest).  The last one is wider than any window, so the column fills
++    /// the window; `measureTitle` names it "Full width".
+     static let measureChoices: [CGFloat] = [68, 70, 72, 90, 120, ReadingMeasure.maximumCharacters]
+ 
+     static func measureTitle(_ characters: CGFloat) -> String {
+diff --git a/Sources/DownrightApp/Support/Preferences.swift b/Sources/DownrightApp/Support/Preferences.swift
+index 598852a..ffe6ae8 100644
+--- a/Sources/DownrightApp/Support/Preferences.swift
++++ b/Sources/DownrightApp/Support/Preferences.swift
+@@ -185,6 +185,8 @@ final class Preferences {
+             // (§8.4).
+             values.externalEditor = ExternalEditor.bestAvailable
+         }
++        // The measure is published too (width patch) so Quick Look, which
++        // runs sandboxed in its own defaults domain, can follow Settings.
+         PreviewAppearanceStore.write(
+             appearance: values.previewAppearance,
+             lightThemeName: values.themeName,
+diff --git a/Sources/DownrightApp/Support/ReaderProfiles.swift b/Sources/DownrightApp/Support/ReaderProfiles.swift
+index 67cf50e..44ad0c1 100644
+--- a/Sources/DownrightApp/Support/ReaderProfiles.swift
++++ b/Sources/DownrightApp/Support/ReaderProfiles.swift
+@@ -87,6 +87,8 @@ struct ReaderProfile: Codable, Equatable, Hashable, Identifiable, Sendable {
+         self.name = name
+         self.isBuiltIn = isBuiltIn
+         self.typographyScale = typographyScale
++        // Upstream clamped profiles to 68–72 as well; the same bounds as the
++        // renderer now, so a profile can choose a wide or full-width column.
+         self.measureCharacters = ReadingMeasure.clamped(measureCharacters)
+         self.chromeDensity = chromeDensity
+         self.motionPreference = motionPreference
+diff --git a/Sources/DownrightQL/PreviewViewController.swift b/Sources/DownrightQL/PreviewViewController.swift
+index 854a6bf..2dc7223 100644
+--- a/Sources/DownrightQL/PreviewViewController.swift
++++ b/Sources/DownrightQL/PreviewViewController.swift
+@@ -261,6 +261,10 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
+                 return isDark ? $0.appearance == .dark : $0.appearance != .dark
+             }
+         } ?? .fallback
++        // Upstream Quick Look read only the appearance and theme names from
++        // the shared domain, so a preview always used the theme's built-in
++        // measure whatever Settings said.  The app now publishes the measure
++        // too: `Preferences` passes it to `PreviewAppearanceStore.write`.
+         var configured = theme
+         if let measure = PreviewAppearanceStore.measureCharacters {
+             configured.typography.measureCharacters = measure
+diff --git a/Sources/MarkdownRender/Theme/PreviewAppearance.swift b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+index 58ae722..1343cfb 100644
+--- a/Sources/MarkdownRender/Theme/PreviewAppearance.swift
++++ b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+@@ -80,6 +80,8 @@ public enum PreviewAppearanceStore {
+         darkThemeName: String,
+         measureCharacters: CGFloat
+     ) {
++        // Upstream wrote only strings (`value as CFString`); the measure is a
++        // number, so the dictionary holds property-list values of either kind.
+         let values: [String: CFPropertyList] = [
+             appearanceKey: appearance.rawValue as CFString,
+             lightThemeKey: lightThemeName as CFString,
+diff --git a/Sources/MarkdownRender/Theme/StyleSheet.swift b/Sources/MarkdownRender/Theme/StyleSheet.swift
+index d5cfed9..70a2984 100644
+--- a/Sources/MarkdownRender/Theme/StyleSheet.swift
++++ b/Sources/MarkdownRender/Theme/StyleSheet.swift
+@@ -167,6 +167,9 @@ public struct StyleSheet {
+         lineHeight = grid * 4
+         let advance = StyleSheet.averageCharacterWidth(of: bodyFont)
+         averageCharacterWidth = advance
++        // Upstream: `min(72, max(68, …))`.  The width patch keeps the 68 floor
++        // and lifts the ceiling to `ReadingMeasure.maximumCharacters`; the
++        // window, not the stylesheet, now limits a wide column.
+         measureWidth = advance * ReadingMeasure.clamped(typography.measureCharacters)
+         mathPointSize = StyleSheet.mathPointSize(body: bodyFont, typography: typography)
+ 
+diff --git a/Sources/MarkdownRender/View/MarkdownContainerView.swift b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+index 6ea5a56..9d9f3b9 100644
+--- a/Sources/MarkdownRender/View/MarkdownContainerView.swift
++++ b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+@@ -198,9 +198,13 @@ public final class MarkdownContainerView: NSView {
+         // Keep the same measure across Document and Source. Widening source to
+         // 90ch recenters the column and slides the left gutter rail, which
+         // reads as the leading chrome teleporting on every mode switch.
+-        // The setting wins at every window width; `available` below is what
+-        // limits a wide measure.  A narrow window still tightens a classic
+-        // 68–72 measure to 66.
++        // Local width patch.  Upstream clamped the setting to 68–72 here and
++        // then overrode it with the window: 66 below 900pt, 72 above 1200pt.
++        // So above 1200pt the user's choice was ignored, and nothing wider
++        // than 72 characters was reachable at all.  Now the setting wins at
++        // every window width; `available` below is what limits a wide
++        // measure.  A narrow window still tightens a classic 68–72 measure
++        // to 66, as upstream did.
+         let renderedTarget = ReadingMeasure.clamped(
+             textView.styleSheet.theme.typography.measureCharacters
+         )
+diff --git a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+index 0b0dd1a..5eecd13 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+@@ -503,8 +503,11 @@ extension MarkdownTextView {
+         // Sample inside the measure: the ornament itself lives in the hanging
+         // indent, where there are no glyphs to hit-test against.
+         let columnLeft = textContainerOrigin.x
+-        // The live column, not the preferred measure: a wide measure setting
+-        // is limited by the window.
++        // The live column, not the preferred measure.  Upstream clamped the
++        // sample point to `styleSheet.measureWidth`, which matched the column
++        // while the measure was capped at 72.  With a wide measure (width
++        // patch) the measure can be far wider than the window, so that clamp
++        // could put the sample point past the column's right edge.
+         let liveMeasure = (textContainer?.size.width).map { $0 - RenderMetrics.codeBleed }
+             ?? styleSheet.measureWidth
+         let measure = max(2, min(styleSheet.measureWidth, liveMeasure))

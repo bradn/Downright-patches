@@ -1,0 +1,744 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 09:54:12 -0400
+Subject: [PATCH 6/6] Tag the iOS port's files with their attribution
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Runs Scripts/tag-attribution.py on ios-port: files the port added are
+"Authored by Claude Code as directed by Brad Nicholas", upstream files it
+changed are "Modified by …" with credit to the Downright contributors.
+The two PNG icons and two asset-catalog JSON files cannot hold a comment;
+GIT-WORKFLOW.md covers them. Sample.md's tag sits after its front matter.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ AGENTS.md                                                       | 1 +
+ Docs/ARCHITECTURE.md                                            | 1 +
+ Package.swift                                                   | 2 ++
+ Sources/MarkdownCore/SafeHTML.swift                             | 2 ++
+ Sources/MarkdownRender/Engine/BlockStyle.swift                  | 2 ++
+ Sources/MarkdownRender/Engine/DecorationEngine.swift            | 2 ++
+ Sources/MarkdownRender/Engine/HardWrapReflow.swift              | 2 ++
+ Sources/MarkdownRender/Engine/MarkerPolicy.swift                | 2 ++
+ Sources/MarkdownRender/Engine/RenderMetrics.swift               | 2 ++
+ Sources/MarkdownRender/Fragments/BoundedImageCache.swift        | 2 ++
+ Sources/MarkdownRender/Fragments/CalloutFragment.swift          | 2 ++
+ Sources/MarkdownRender/Fragments/CodeBlockFragment.swift        | 2 ++
+ Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift | 2 ++
+ Sources/MarkdownRender/Fragments/FragmentBase.swift             | 2 ++
+ Sources/MarkdownRender/Fragments/FrontMatterFragment.swift      | 2 ++
+ Sources/MarkdownRender/Fragments/ImageFragment.swift            | 2 ++
+ Sources/MarkdownRender/Fragments/InlineCodePill.swift           | 2 ++
+ Sources/MarkdownRender/Fragments/InlineMathDisplay.swift        | 2 ++
+ Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift     | 2 ++
+ Sources/MarkdownRender/Fragments/MathFragment.swift             | 2 ++
+ Sources/MarkdownRender/Fragments/MathRenderer.swift             | 2 ++
+ Sources/MarkdownRender/Fragments/MermaidFragment.swift          | 2 ++
+ Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift    | 2 ++
+ Sources/MarkdownRender/Fragments/TableFragment.swift            | 2 ++
+ Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift    | 2 ++
+ Sources/MarkdownRender/Motion.swift                             | 2 ++
+ Sources/MarkdownRender/Theme/ThemeStore.swift                   | 2 ++
+ Sources/MarkdownRender/Theme/ThemeValidation.swift              | 2 ++
+ Sources/MarkdownRender/Theme/VSCodeThemeImport.swift            | 2 ++
+ Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift    | 2 ++
+ Sources/MarkdownRender/View/DensityGutterView.swift             | 2 ++
+ Sources/MarkdownRender/View/DensityOutlineWindow.swift          | 2 ++
+ Sources/MarkdownRender/View/FootnoteMarginView.swift            | 2 ++
+ Sources/MarkdownRender/View/FragmentProvider.swift              | 2 ++
+ Sources/MarkdownRender/View/GutterRailView.swift                | 2 ++
+ Sources/MarkdownRender/View/MarkdownContentStorage.swift        | 2 ++
+ Sources/MarkdownRender/View/MarkdownSmartPaste.swift            | 2 ++
+ Sources/MarkdownRender/View/MarkdownTextView.swift              | 2 ++
+ Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift      | 2 ++
+ Sources/MarkdownRender/View/ParagraphSubstitution.swift         | 2 ++
+ Sources/MarkdownRender/View/StyleSheetDefaults.swift            | 2 ++
+ Sources/MarkdownRender/View/TrackingArea.swift                  | 2 ++
+ Sources/MarkdownRender/_bootstrap.swift                         | 2 ++
+ Tests/MarkdownCoreTests/SafeHTMLTests.swift                     | 2 ++
+ Tests/MarkdownRenderTests/BoundedImageCacheTests.swift          | 2 ++
+ Tests/MarkdownRenderTests/CalloutGeometryTests.swift            | 2 ++
+ Tests/MarkdownRenderTests/ClickStabilityTests.swift             | 2 ++
+ Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift      | 2 ++
+ Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift          | 2 ++
+ Tests/MarkdownRenderTests/ContentResizeTests.swift              | 2 ++
+ Tests/MarkdownRenderTests/ContentStorageTilingTests.swift       | 2 ++
+ Tests/MarkdownRenderTests/DecorationTests.swift                 | 2 ++
+ Tests/MarkdownRenderTests/DensityRailTests.swift                | 2 ++
+ Tests/MarkdownRenderTests/DropAndQuickLookTests.swift           | 2 ++
+ Tests/MarkdownRenderTests/GeometryProbeTests.swift              | 2 ++
+ Tests/MarkdownRenderTests/LayoutFillerTests.swift               | 2 ++
+ Tests/MarkdownRenderTests/ListOrnamentTests.swift               | 2 ++
+ Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift    | 2 ++
+ Tests/MarkdownRenderTests/MotionSystemTests.swift               | 2 ++
+ Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift            | 2 ++
+ Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift          | 2 ++
+ Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift             | 2 ++
+ Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift      | 2 ++
+ Tests/MarkdownRenderTests/SmartPasteTests.swift                 | 2 ++
+ Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift        | 2 ++
+ Tests/MarkdownRenderTests/TypingInvalidationTests.swift         | 2 ++
+ 66 files changed, 130 insertions(+)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 631b296..f82a8b4 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,3 +1,4 @@
++<!-- Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com> Original file by the Downright contributors (MIT); see git history for the changes. -->
+ # Downright Repository Guide
+ 
+ This file contains Downright-specific context, invariants, and evidence gates. Follow any applicable higher-level instructions as well.
+diff --git a/Docs/ARCHITECTURE.md b/Docs/ARCHITECTURE.md
+index 7df7a0f..125a62e 100644
+--- a/Docs/ARCHITECTURE.md
++++ b/Docs/ARCHITECTURE.md
+@@ -1,3 +1,4 @@
++<!-- Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com> Original file by the Downright contributors (MIT); see git history for the changes. -->
+ # Downright Architecture
+ 
+ ## Goals and invariants
+diff --git a/Package.swift b/Package.swift
+index 3492f54..768e116 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -1,4 +1,6 @@
+ // swift-tools-version: 6.0
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import Foundation
+ import PackageDescription
+ 
+diff --git a/Sources/MarkdownCore/SafeHTML.swift b/Sources/MarkdownCore/SafeHTML.swift
+index e92878e..7cbcbbd 100644
+--- a/Sources/MarkdownCore/SafeHTML.swift
++++ b/Sources/MarkdownCore/SafeHTML.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import Foundation
+ 
+ /// The deliberately small HTML vocabulary that Downright may present as
+diff --git a/Sources/MarkdownRender/Engine/BlockStyle.swift b/Sources/MarkdownRender/Engine/BlockStyle.swift
+index d6d9e0b..1016c40 100644
+--- a/Sources/MarkdownRender/Engine/BlockStyle.swift
++++ b/Sources/MarkdownRender/Engine/BlockStyle.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Engine/DecorationEngine.swift b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+index 313b093..948df19 100644
+--- a/Sources/MarkdownRender/Engine/DecorationEngine.swift
++++ b/Sources/MarkdownRender/Engine/DecorationEngine.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Engine/HardWrapReflow.swift b/Sources/MarkdownRender/Engine/HardWrapReflow.swift
+index fe20e9c..a63d25e 100644
+--- a/Sources/MarkdownRender/Engine/HardWrapReflow.swift
++++ b/Sources/MarkdownRender/Engine/HardWrapReflow.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import Foundation
+ import MarkdownCore
+ 
+diff --git a/Sources/MarkdownRender/Engine/MarkerPolicy.swift b/Sources/MarkdownRender/Engine/MarkerPolicy.swift
+index de408ad..b4b3516 100644
+--- a/Sources/MarkdownRender/Engine/MarkerPolicy.swift
++++ b/Sources/MarkdownRender/Engine/MarkerPolicy.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import Foundation
+ import MarkdownCore
+ 
+diff --git a/Sources/MarkdownRender/Engine/RenderMetrics.swift b/Sources/MarkdownRender/Engine/RenderMetrics.swift
+index 591b5ea..4d6c904 100644
+--- a/Sources/MarkdownRender/Engine/RenderMetrics.swift
++++ b/Sources/MarkdownRender/Engine/RenderMetrics.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+index dd64473..763f409 100644
+--- a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
++++ b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/CalloutFragment.swift b/Sources/MarkdownRender/Fragments/CalloutFragment.swift
+index 87e036a..5f49725 100644
+--- a/Sources/MarkdownRender/Fragments/CalloutFragment.swift
++++ b/Sources/MarkdownRender/Fragments/CalloutFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift b/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
+index 3527ecf..e438c7a 100644
+--- a/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
++++ b/Sources/MarkdownRender/Fragments/CodeBlockFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift b/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift
+index 7f1e13d..8183368 100644
+--- a/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift
++++ b/Sources/MarkdownRender/Fragments/FootnoteReferenceDisplay.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/FragmentBase.swift b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+index d3f7376..a9407f9 100644
+--- a/Sources/MarkdownRender/Fragments/FragmentBase.swift
++++ b/Sources/MarkdownRender/Fragments/FragmentBase.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift b/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift
+index d229a38..24fa01c 100644
+--- a/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift
++++ b/Sources/MarkdownRender/Fragments/FrontMatterFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/ImageFragment.swift b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+index 4c66bbb..822ee74 100644
+--- a/Sources/MarkdownRender/Fragments/ImageFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/InlineCodePill.swift b/Sources/MarkdownRender/Fragments/InlineCodePill.swift
+index 34f992a..41e171c 100644
+--- a/Sources/MarkdownRender/Fragments/InlineCodePill.swift
++++ b/Sources/MarkdownRender/Fragments/InlineCodePill.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift b/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift
+index 0ea7f56..5e30d30 100644
+--- a/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift
++++ b/Sources/MarkdownRender/Fragments/InlineMathDisplay.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift b/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift
+index de2b4d6..c78be38 100644
+--- a/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ListOrnamentFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/MathFragment.swift b/Sources/MarkdownRender/Fragments/MathFragment.swift
+index 0417343..f3d1be8 100644
+--- a/Sources/MarkdownRender/Fragments/MathFragment.swift
++++ b/Sources/MarkdownRender/Fragments/MathFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/MathRenderer.swift b/Sources/MarkdownRender/Fragments/MathRenderer.swift
+index 617b54d..d7f6003 100644
+--- a/Sources/MarkdownRender/Fragments/MathRenderer.swift
++++ b/Sources/MarkdownRender/Fragments/MathRenderer.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/MermaidFragment.swift b/Sources/MarkdownRender/Fragments/MermaidFragment.swift
+index dfd1ffc..cd6547a 100644
+--- a/Sources/MarkdownRender/Fragments/MermaidFragment.swift
++++ b/Sources/MarkdownRender/Fragments/MermaidFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift b/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift
+index fe7297a..22d3f11 100644
+--- a/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift
++++ b/Sources/MarkdownRender/Fragments/MermaidRendererBridge.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/TableFragment.swift b/Sources/MarkdownRender/Fragments/TableFragment.swift
+index 09751b7..c4bb87d 100644
+--- a/Sources/MarkdownRender/Fragments/TableFragment.swift
++++ b/Sources/MarkdownRender/Fragments/TableFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift b/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift
+index 71d5a92..049a687 100644
+--- a/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ThematicBreakFragment.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Motion.swift b/Sources/MarkdownRender/Motion.swift
+index f8ba1ec..96e548f 100644
+--- a/Sources/MarkdownRender/Motion.swift
++++ b/Sources/MarkdownRender/Motion.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import QuartzCore
+diff --git a/Sources/MarkdownRender/Theme/ThemeStore.swift b/Sources/MarkdownRender/Theme/ThemeStore.swift
+index 79d3d56..f695e81 100644
+--- a/Sources/MarkdownRender/Theme/ThemeStore.swift
++++ b/Sources/MarkdownRender/Theme/ThemeStore.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Theme/ThemeValidation.swift b/Sources/MarkdownRender/Theme/ThemeValidation.swift
+index 2c9a55c..4f11e41 100644
+--- a/Sources/MarkdownRender/Theme/ThemeValidation.swift
++++ b/Sources/MarkdownRender/Theme/ThemeValidation.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift b/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift
+index 1ba4d9e..616c0bc 100644
+--- a/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift
++++ b/Sources/MarkdownRender/Theme/VSCodeThemeImport.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift b/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift
+index f3fdcf4..6c2f0ad 100644
+--- a/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift
++++ b/Sources/MarkdownRender/View/DensityGutterPreviewWindow.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import MarkdownCore
+diff --git a/Sources/MarkdownRender/View/DensityGutterView.swift b/Sources/MarkdownRender/View/DensityGutterView.swift
+index 198ce57..8614803 100644
+--- a/Sources/MarkdownRender/View/DensityGutterView.swift
++++ b/Sources/MarkdownRender/View/DensityGutterView.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import MarkdownCore
+diff --git a/Sources/MarkdownRender/View/DensityOutlineWindow.swift b/Sources/MarkdownRender/View/DensityOutlineWindow.swift
+index 9ba420a..82c5a48 100644
+--- a/Sources/MarkdownRender/View/DensityOutlineWindow.swift
++++ b/Sources/MarkdownRender/View/DensityOutlineWindow.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ 
+diff --git a/Sources/MarkdownRender/View/FootnoteMarginView.swift b/Sources/MarkdownRender/View/FootnoteMarginView.swift
+index 71c5560..b6e01e1 100644
+--- a/Sources/MarkdownRender/View/FootnoteMarginView.swift
++++ b/Sources/MarkdownRender/View/FootnoteMarginView.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import MarkdownCore
+diff --git a/Sources/MarkdownRender/View/FragmentProvider.swift b/Sources/MarkdownRender/View/FragmentProvider.swift
+index d1c2140..de767ea 100644
+--- a/Sources/MarkdownRender/View/FragmentProvider.swift
++++ b/Sources/MarkdownRender/View/FragmentProvider.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/View/GutterRailView.swift b/Sources/MarkdownRender/View/GutterRailView.swift
+index 506083c..9490bf5 100644
+--- a/Sources/MarkdownRender/View/GutterRailView.swift
++++ b/Sources/MarkdownRender/View/GutterRailView.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import MarkdownCore
+diff --git a/Sources/MarkdownRender/View/MarkdownContentStorage.swift b/Sources/MarkdownRender/View/MarkdownContentStorage.swift
+index be40056..414c953 100644
+--- a/Sources/MarkdownRender/View/MarkdownContentStorage.swift
++++ b/Sources/MarkdownRender/View/MarkdownContentStorage.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/View/MarkdownSmartPaste.swift b/Sources/MarkdownRender/View/MarkdownSmartPaste.swift
+index 48d941a..de1971b 100644
+--- a/Sources/MarkdownRender/View/MarkdownSmartPaste.swift
++++ b/Sources/MarkdownRender/View/MarkdownSmartPaste.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import Foundation
+diff --git a/Sources/MarkdownRender/View/MarkdownTextView.swift b/Sources/MarkdownRender/View/MarkdownTextView.swift
+index e6a23cb..60ad600 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextView.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextView.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import MarkdownCore
+diff --git a/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift b/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift
+index 2932b14..ffe0c04 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextViewDelegate.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ import MarkdownCore
+diff --git a/Sources/MarkdownRender/View/ParagraphSubstitution.swift b/Sources/MarkdownRender/View/ParagraphSubstitution.swift
+index f49a4cf..97becc7 100644
+--- a/Sources/MarkdownRender/View/ParagraphSubstitution.swift
++++ b/Sources/MarkdownRender/View/ParagraphSubstitution.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Sources/MarkdownRender/View/StyleSheetDefaults.swift b/Sources/MarkdownRender/View/StyleSheetDefaults.swift
+index c140d19..331a131 100644
+--- a/Sources/MarkdownRender/View/StyleSheetDefaults.swift
++++ b/Sources/MarkdownRender/View/StyleSheetDefaults.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ 
+diff --git a/Sources/MarkdownRender/View/TrackingArea.swift b/Sources/MarkdownRender/View/TrackingArea.swift
+index 8ac1a1b..9f7b422 100644
+--- a/Sources/MarkdownRender/View/TrackingArea.swift
++++ b/Sources/MarkdownRender/View/TrackingArea.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ 
+diff --git a/Sources/MarkdownRender/_bootstrap.swift b/Sources/MarkdownRender/_bootstrap.swift
+index 55c9a54..d390818 100644
+--- a/Sources/MarkdownRender/_bootstrap.swift
++++ b/Sources/MarkdownRender/_bootstrap.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Tests/MarkdownCoreTests/SafeHTMLTests.swift b/Tests/MarkdownCoreTests/SafeHTMLTests.swift
+index 56df6f7..46b1163 100644
+--- a/Tests/MarkdownCoreTests/SafeHTMLTests.swift
++++ b/Tests/MarkdownCoreTests/SafeHTMLTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import Foundation
+ import Testing
+ @testable import MarkdownCore
+diff --git a/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift b/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift
+index ca6ed5e..fe649e0 100644
+--- a/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift
++++ b/Tests/MarkdownRenderTests/BoundedImageCacheTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Tests/MarkdownRenderTests/CalloutGeometryTests.swift b/Tests/MarkdownRenderTests/CalloutGeometryTests.swift
+index 0f2ad7f..30f0a3f 100644
+--- a/Tests/MarkdownRenderTests/CalloutGeometryTests.swift
++++ b/Tests/MarkdownRenderTests/CalloutGeometryTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/ClickStabilityTests.swift b/Tests/MarkdownRenderTests/ClickStabilityTests.swift
+index 6ece12e..625d934 100644
+--- a/Tests/MarkdownRenderTests/ClickStabilityTests.swift
++++ b/Tests/MarkdownRenderTests/ClickStabilityTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift b/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift
+index cea8fff..a43bad3 100644
+--- a/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift
++++ b/Tests/MarkdownRenderTests/ClipboardSemanticHTMLTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift b/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift
+index e902895..eb241da 100644
+--- a/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift
++++ b/Tests/MarkdownRenderTests/CodeBlockGeometryTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/ContentResizeTests.swift b/Tests/MarkdownRenderTests/ContentResizeTests.swift
+index b2f406c..354363d 100644
+--- a/Tests/MarkdownRenderTests/ContentResizeTests.swift
++++ b/Tests/MarkdownRenderTests/ContentResizeTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift b/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift
+index 9ba0baf..f0b66b6 100644
+--- a/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift
++++ b/Tests/MarkdownRenderTests/ContentStorageTilingTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Tests/MarkdownRenderTests/DecorationTests.swift b/Tests/MarkdownRenderTests/DecorationTests.swift
+index ed5cb75..a5556bf 100644
+--- a/Tests/MarkdownRenderTests/DecorationTests.swift
++++ b/Tests/MarkdownRenderTests/DecorationTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/DensityRailTests.swift b/Tests/MarkdownRenderTests/DensityRailTests.swift
+index 6f03d36..51cda14 100644
+--- a/Tests/MarkdownRenderTests/DensityRailTests.swift
++++ b/Tests/MarkdownRenderTests/DensityRailTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift b/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift
+index f5e4972..b610c1c 100644
+--- a/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift
++++ b/Tests/MarkdownRenderTests/DropAndQuickLookTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/GeometryProbeTests.swift b/Tests/MarkdownRenderTests/GeometryProbeTests.swift
+index 46d7258..80ba49b 100644
+--- a/Tests/MarkdownRenderTests/GeometryProbeTests.swift
++++ b/Tests/MarkdownRenderTests/GeometryProbeTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Tests/MarkdownRenderTests/LayoutFillerTests.swift b/Tests/MarkdownRenderTests/LayoutFillerTests.swift
+index 65c0141..bb734d3 100644
+--- a/Tests/MarkdownRenderTests/LayoutFillerTests.swift
++++ b/Tests/MarkdownRenderTests/LayoutFillerTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/ListOrnamentTests.swift b/Tests/MarkdownRenderTests/ListOrnamentTests.swift
+index d579fce..36eef99 100644
+--- a/Tests/MarkdownRenderTests/ListOrnamentTests.swift
++++ b/Tests/MarkdownRenderTests/ListOrnamentTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift b/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift
+index 3f260c1..e972752 100644
+--- a/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift
++++ b/Tests/MarkdownRenderTests/MermaidOrientationProbeTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // Pixel probes read NSBitmapImageRep; no iOS counterpart yet.
+ #if os(macOS)
+ #if os(macOS)
+diff --git a/Tests/MarkdownRenderTests/MotionSystemTests.swift b/Tests/MarkdownRenderTests/MotionSystemTests.swift
+index 3cc9a90..e62f424 100644
+--- a/Tests/MarkdownRenderTests/MotionSystemTests.swift
++++ b/Tests/MarkdownRenderTests/MotionSystemTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift b/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift
+index f496fde..3edb686 100644
+--- a/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift
++++ b/Tests/MarkdownRenderTests/ReflowAndRhythmTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift b/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift
+index 388d352..e585ccf 100644
+--- a/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift
++++ b/Tests/MarkdownRenderTests/SafeHTMLLineBreakTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift b/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
+index e00ce1b..eccda36 100644
+--- a/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
++++ b/Tests/MarkdownRenderTests/SafeHTMLRenderTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ #if os(macOS)
+ import AppKit
+ #else
+diff --git a/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift b/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift
+index e02a29c..0adcad3 100644
+--- a/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift
++++ b/Tests/MarkdownRenderTests/SmartPasteIntegrationTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/SmartPasteTests.swift b/Tests/MarkdownRenderTests/SmartPasteTests.swift
+index e16656f..ba1c606 100644
+--- a/Tests/MarkdownRenderTests/SmartPasteTests.swift
++++ b/Tests/MarkdownRenderTests/SmartPasteTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import Foundation
+diff --git a/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift b/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift
+index fcf30f8..6609b73 100644
+--- a/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift
++++ b/Tests/MarkdownRenderTests/SpeechAccessibilityTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit
+diff --git a/Tests/MarkdownRenderTests/TypingInvalidationTests.swift b/Tests/MarkdownRenderTests/TypingInvalidationTests.swift
+index 54e822d..9e90a5e 100644
+--- a/Tests/MarkdownRenderTests/TypingInvalidationTests.swift
++++ b/Tests/MarkdownRenderTests/TypingInvalidationTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ // The AppKit view layer has no iOS counterpart yet.
+ #if os(macOS)
+ import AppKit

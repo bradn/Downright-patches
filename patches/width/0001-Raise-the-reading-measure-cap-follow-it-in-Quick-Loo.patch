@@ -1,0 +1,379 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Sun, 4 Oct 2026 18:54:25 -0400
+Subject: [PATCH 1/3] Raise the reading-measure cap; follow it in Quick Look
+
+Local patch on upstream 9be0680 (v1.0.16 + main). The "Measure
+(characters)" setting may exceed 72; ReadingMeasure (68...1000) holds the
+bounds, the container honours the setting at every width, and Quick Look
+reads the measure through the shared preferences domain. Also fixes
+install.sh's undefined STAGED_APP.
+
+See WIDTH-PATCH-HANDOFF.md for the full list and how to reapply it.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ Docs/QUICKLOOK.md                             |  3 ++
+ Scripts/install.sh                            |  1 +
+ .../App/PreferencesWindowController.swift     |  4 +--
+ .../Panels/ReaderProfilePickerView.swift      | 14 +++++++--
+ .../DownrightApp/Support/Preferences.swift    |  6 ++--
+ .../DownrightApp/Support/ReaderProfiles.swift |  3 +-
+ .../DownrightQL/PreviewViewController.swift   |  8 +++--
+ Sources/MarkdownRender/RenderContracts.swift  | 20 +++++++++++--
+ .../Theme/PreviewAppearance.swift             | 29 +++++++++++++++----
+ Sources/MarkdownRender/Theme/StyleSheet.swift |  2 +-
+ .../View/MarkdownContainerView.swift          | 12 ++++----
+ .../View/MarkdownTextView+Interaction.swift   |  7 ++++-
+ .../ReaderProfileTests.swift                  |  3 +-
+ Tests/MarkdownRenderTests/ThemeTests.swift    |  9 ++++--
+ 14 files changed, 92 insertions(+), 29 deletions(-)
+
+diff --git a/Docs/QUICKLOOK.md b/Docs/QUICKLOOK.md
+index 84fb1ef..220e68c 100644
+--- a/Docs/QUICKLOOK.md
++++ b/Docs/QUICKLOOK.md
+@@ -72,6 +72,9 @@ the default application, or contact a service.
+ - Appearance follows macOS by default. Choose **Settings → Appearance → Quick
+   Look appearance** to pin previews to Light or Dark; the setting is shared with
+   the sandboxed extension.
++- The reading measure follows **Settings → Measure (characters)**, shared the
++  same way. A narrow Quick Look panel still tightens a classic 68–72 measure to
++  66, exactly as a narrow document window does.
+ 
+ ## Memory discipline
+ 
+diff --git a/Scripts/install.sh b/Scripts/install.sh
+index e0f474d..53b7211 100755
+--- a/Scripts/install.sh
++++ b/Scripts/install.sh
+@@ -35,6 +35,7 @@ fi
+ echo "==> Installing to $APP_DEST"
+ DEST_PARENT="$(dirname "$APP_DEST")"
+ STAGE_ROOT="$(mktemp -d "$DEST_PARENT/.downright-install.XXXXXX")"
++STAGED_APP="$STAGE_ROOT/Downright.app"
+ # The backup of the outgoing app deliberately lives OUTSIDE the staging tree
+ # the exit trap deletes. Between "old app moved aside" and "new app in
+ # place", the backup is the only copy of the user's installed Downright; an
+diff --git a/Sources/DownrightApp/App/PreferencesWindowController.swift b/Sources/DownrightApp/App/PreferencesWindowController.swift
+index cce9e57..aadba25 100644
+--- a/Sources/DownrightApp/App/PreferencesWindowController.swift
++++ b/Sources/DownrightApp/App/PreferencesWindowController.swift
+@@ -888,8 +888,8 @@ enum PreferencesForms {
+                      get: { Double(Preferences.shared.values.typography.lineHeightMultiple) },
+                      set: { value in Preferences.shared.update { $0.typography.lineHeightMultiple = CGFloat(value) } }),
+             .stepper("Measure (characters)",
+-                     help: "How much text fits on a line before it wraps. Around 68 to 72 reads best; full-width text is the most common thing Markdown viewers get wrong.",
+-                     range: 60...80, step: 1,
++                     help: "How much text fits on a line before it wraps. Around 68 to 72 reads best. Larger values widen the column up to the window width.",
++                     range: Double(ReadingMeasure.minimumCharacters)...Double(ReadingMeasure.maximumCharacters), step: 1,
+                      get: { Double(Preferences.shared.values.typography.measureCharacters) },
+                      set: { value in Preferences.shared.update { $0.typography.measureCharacters = CGFloat(value) } }),
+ 
+diff --git a/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift b/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
+index 25b66aa..1f5848b 100644
+--- a/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
++++ b/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
+@@ -117,7 +117,7 @@ final class ReaderProfilePickerView: NSView, PanelSurface {
+         addSubview(deleteButton)
+ 
+         addControl(label: "Typography scale", titles: ReaderTypographyScale.allCases.map(\.title))
+-        addControl(label: "Measure width", titles: ["68 characters", "70 characters", "72 characters"])
++        addControl(label: "Measure width", titles: Self.measureChoices.map(Self.measureTitle))
+         addControl(label: "Chrome density", titles: ReaderChromeDensity.allCases.map(\.title))
+         addControl(label: "Motion", titles: ReaderMotionPreference.allCases.map(\.title))
+ 
+@@ -171,6 +171,14 @@ final class ReaderProfilePickerView: NSView, PanelSurface {
+         // As… away from the document for as long as the panel was open (§7.2).
+     }
+ 
++    /// Measure presets.  The last one is wider than any window, so the column
++    /// fills the window.
++    static let measureChoices: [CGFloat] = [68, 70, 72, 90, 120, ReadingMeasure.maximumCharacters]
++
++    static func measureTitle(_ characters: CGFloat) -> String {
++        characters >= ReadingMeasure.maximumCharacters ? "Full width" : "\(Int(characters)) characters"
++    }
++
+     private func addControl(label: String, titles: [String]) {
+         let name = NSTextField(labelWithString: label)
+         name.font = PanelFont.row
+@@ -208,7 +216,7 @@ final class ReaderProfilePickerView: NSView, PanelSurface {
+     private func loadControls() {
+         isReloading = true
+         controls[safe: 0]?.selectItem(at: ReaderTypographyScale.allCases.firstIndex(of: selectedProfile.typographyScale) ?? 0)
+-        let measure = [68, 70, 72].firstIndex(of: Int(selectedProfile.measureCharacters)) ?? 1
++        let measure = Self.measureChoices.firstIndex(of: selectedProfile.measureCharacters) ?? 1
+         controls[safe: 1]?.selectItem(at: measure)
+         controls[safe: 2]?.selectItem(at: ReaderChromeDensity.allCases.firstIndex(of: selectedProfile.chromeDensity) ?? 0)
+         controls[safe: 3]?.selectItem(at: ReaderMotionPreference.allCases.firstIndex(of: selectedProfile.motionPreference) ?? 0)
+@@ -231,7 +239,7 @@ final class ReaderProfilePickerView: NSView, PanelSurface {
+         guard sender.indexOfSelectedItem >= 0 else { return }
+         var profile = selectedProfile
+         if controls.indices.contains(0), sender === controls[0] { profile.typographyScale = ReaderTypographyScale.allCases[sender.indexOfSelectedItem] }
+-        else if controls.indices.contains(1), sender === controls[1] { profile.measureCharacters = CGFloat([68, 70, 72][sender.indexOfSelectedItem]) }
++        else if controls.indices.contains(1), sender === controls[1] { profile.measureCharacters = Self.measureChoices[sender.indexOfSelectedItem] }
+         else if controls.indices.contains(2), sender === controls[2] { profile.chromeDensity = ReaderChromeDensity.allCases[sender.indexOfSelectedItem] }
+         else if controls.indices.contains(3), sender === controls[3] { profile.motionPreference = ReaderMotionPreference.allCases[sender.indexOfSelectedItem] }
+         selectedProfile = profile
+diff --git a/Sources/DownrightApp/Support/Preferences.swift b/Sources/DownrightApp/Support/Preferences.swift
+index 3c0c021..598852a 100644
+--- a/Sources/DownrightApp/Support/Preferences.swift
++++ b/Sources/DownrightApp/Support/Preferences.swift
+@@ -188,7 +188,8 @@ final class Preferences {
+         PreviewAppearanceStore.write(
+             appearance: values.previewAppearance,
+             lightThemeName: values.themeName,
+-            darkThemeName: values.darkThemeName
++            darkThemeName: values.darkThemeName,
++            measureCharacters: values.typography.measureCharacters
+         )
+         SnapshotStore.shared.maximumAge = TimeInterval(values.historyMaximumDays) * 86_400
+         SnapshotStore.shared.maximumBytes = values.historyMaximumMegabytes * 1024 * 1024
+@@ -241,7 +242,8 @@ final class Preferences {
+             PreviewAppearanceStore.write(
+                 appearance: values.previewAppearance,
+                 lightThemeName: values.themeName,
+-                darkThemeName: values.darkThemeName
++                darkThemeName: values.darkThemeName,
++                measureCharacters: values.typography.measureCharacters
+             )
+             lastPersistenceError = nil
+         } catch {
+diff --git a/Sources/DownrightApp/Support/ReaderProfiles.swift b/Sources/DownrightApp/Support/ReaderProfiles.swift
+index 80e433d..67cf50e 100644
+--- a/Sources/DownrightApp/Support/ReaderProfiles.swift
++++ b/Sources/DownrightApp/Support/ReaderProfiles.swift
+@@ -1,4 +1,5 @@
+ import Foundation
++import MarkdownRender
+ 
+ /// A reader profile changes presentation only. It never changes document text,
+ /// the selected theme, or the document's saved state.
+@@ -86,7 +87,7 @@ struct ReaderProfile: Codable, Equatable, Hashable, Identifiable, Sendable {
+         self.name = name
+         self.isBuiltIn = isBuiltIn
+         self.typographyScale = typographyScale
+-        self.measureCharacters = min(72, max(68, measureCharacters))
++        self.measureCharacters = ReadingMeasure.clamped(measureCharacters)
+         self.chromeDensity = chromeDensity
+         self.motionPreference = motionPreference
+     }
+diff --git a/Sources/DownrightQL/PreviewViewController.swift b/Sources/DownrightQL/PreviewViewController.swift
+index 5b869d5..854a6bf 100644
+--- a/Sources/DownrightQL/PreviewViewController.swift
++++ b/Sources/DownrightQL/PreviewViewController.swift
+@@ -243,7 +243,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
+     }
+ 
+     /// Quick Look has its own bundle and defaults domain. Resolve the palette
+-    /// from the shared setting, falling back to the bundled System theme so a
++    /// and reading measure from the shared settings, falling back to the bundled System theme so a
+     /// dark macOS desktop can never inherit the app's old Paper Light default.
+     @MainActor
+     private func makeStyleSheet() -> StyleSheet {
+@@ -261,7 +261,11 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
+                 return isDark ? $0.appearance == .dark : $0.appearance != .dark
+             }
+         } ?? .fallback
+-        return StyleSheet(theme: theme, appearance: appearance)
++        var configured = theme
++        if let measure = PreviewAppearanceStore.measureCharacters {
++            configured.typography.measureCharacters = measure
++        }
++        return StyleSheet(theme: configured, appearance: appearance)
+     }
+ 
+     /// Quick Look reuses one controller for multiple files.  Release every
+diff --git a/Sources/MarkdownRender/RenderContracts.swift b/Sources/MarkdownRender/RenderContracts.swift
+index 2b81ed1..bcce840 100644
+--- a/Sources/MarkdownRender/RenderContracts.swift
++++ b/Sources/MarkdownRender/RenderContracts.swift
+@@ -419,8 +419,9 @@ public struct TypographyConfig: Codable, Sendable, Equatable {
+     /// 1.2 / 1.25 / 1.333 — one ratio drives every heading size (§11.1).
+     public var scaleRatio: CGFloat
+     public var lineHeightMultiple: CGFloat
+-    /// Capped at 68–72 characters (§11.1).  The single most common thing
+-    /// markdown viewers get wrong.
++    /// Preferred reading measure in characters.  Floored at
++    /// `ReadingMeasure.minimumCharacters`; there is no practical upper bound —
++    /// the column is limited only by the window (local width patch).
+     public var measureCharacters: CGFloat
+     public var monoFamily: String
+     /// Code size as a fraction of the body size.
+@@ -452,6 +453,21 @@ public struct TypographyConfig: Codable, Sendable, Equatable {
+     )
+ }
+ 
++/// The one place the reading-measure bounds live, shared by the renderer,
++/// reader profiles, and Settings.
++public enum ReadingMeasure {
++    /// Narrowest measure the renderer sets, in characters.
++    public static let minimumCharacters: CGFloat = 68
++    /// Wider than any window, so a measure this large fills the window: the
++    /// column is `min(preferred + bleed, available)`.  Finite only so the
++    /// container geometry and the Settings stepper stay well defined.
++    public static let maximumCharacters: CGFloat = 1000
++
++    public static func clamped(_ characters: CGFloat) -> CGFloat {
++        min(maximumCharacters, max(minimumCharacters, characters))
++    }
++}
++
+ public struct Theme: Codable, Sendable, Equatable {
+     public var name: String
+     public var appearance: ThemeAppearance
+diff --git a/Sources/MarkdownRender/Theme/PreviewAppearance.swift b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+index 3291de7..58ae722 100644
+--- a/Sources/MarkdownRender/Theme/PreviewAppearance.swift
++++ b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+@@ -38,6 +38,7 @@ public enum PreviewAppearanceStore {
+     public static let appearanceKey = "com.ezzy.downright.quickLook.appearance"
+     public static let lightThemeKey = "com.ezzy.downright.quickLook.lightTheme"
+     public static let darkThemeKey = "com.ezzy.downright.quickLook.darkTheme"
++    public static let measureKey = "com.ezzy.downright.quickLook.measureCharacters"
+ 
+     private static func value(forKey key: String) -> String? {
+         CFPreferencesCopyValue(
+@@ -59,20 +60,36 @@ public enum PreviewAppearanceStore {
+         return value(forKey: isDark ? darkThemeKey : lightThemeKey)
+     }
+ 
++    /// The reading measure chosen in Settings. Without it the preview falls
++    /// back to the theme's built-in measure regardless of the user's choice.
++    /// Missing or malformed values mean the theme's own measure.
++    public static var measureCharacters: CGFloat? {
++        let raw = CFPreferencesCopyValue(
++            measureKey as CFString,
++            kCFPreferencesAnyApplication,
++            kCFPreferencesCurrentUser,
++            kCFPreferencesAnyHost
++        ) as? NSNumber
++        guard let raw, raw.doubleValue.isFinite else { return nil }
++        return ReadingMeasure.clamped(CGFloat(raw.doubleValue))
++    }
++
+     public static func write(
+         appearance: PreviewAppearance,
+         lightThemeName: String,
+-        darkThemeName: String
++        darkThemeName: String,
++        measureCharacters: CGFloat
+     ) {
+-        let values = [
+-            appearanceKey: appearance.rawValue,
+-            lightThemeKey: lightThemeName,
+-            darkThemeKey: darkThemeName,
++        let values: [String: CFPropertyList] = [
++            appearanceKey: appearance.rawValue as CFString,
++            lightThemeKey: lightThemeName as CFString,
++            darkThemeKey: darkThemeName as CFString,
++            measureKey: Double(ReadingMeasure.clamped(measureCharacters)) as NSNumber,
+         ]
+         for (key, value) in values {
+             CFPreferencesSetValue(
+                 key as CFString,
+-                value as CFString,
++                value,
+                 kCFPreferencesAnyApplication,
+                 kCFPreferencesCurrentUser,
+                 kCFPreferencesAnyHost
+diff --git a/Sources/MarkdownRender/Theme/StyleSheet.swift b/Sources/MarkdownRender/Theme/StyleSheet.swift
+index de27623..d5cfed9 100644
+--- a/Sources/MarkdownRender/Theme/StyleSheet.swift
++++ b/Sources/MarkdownRender/Theme/StyleSheet.swift
+@@ -167,7 +167,7 @@ public struct StyleSheet {
+         lineHeight = grid * 4
+         let advance = StyleSheet.averageCharacterWidth(of: bodyFont)
+         averageCharacterWidth = advance
+-        measureWidth = advance * min(72, max(68, typography.measureCharacters))
++        measureWidth = advance * ReadingMeasure.clamped(typography.measureCharacters)
+         mathPointSize = StyleSheet.mathPointSize(body: bodyFont, typography: typography)
+ 
+         // Colours
+diff --git a/Sources/MarkdownRender/View/MarkdownContainerView.swift b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+index 332496e..6ea5a56 100644
+--- a/Sources/MarkdownRender/View/MarkdownContainerView.swift
++++ b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+@@ -198,15 +198,15 @@ public final class MarkdownContainerView: NSView {
+         // Keep the same measure across Document and Source. Widening source to
+         // 90ch recenters the column and slides the left gutter rail, which
+         // reads as the leading chrome teleporting on every mode switch.
+-        let renderedTarget = min(
+-            72,
+-            max(68, textView.styleSheet.theme.typography.measureCharacters)
++        // The setting wins at every window width; `available` below is what
++        // limits a wide measure.  A narrow window still tightens a classic
++        // 68–72 measure to 66.
++        let renderedTarget = ReadingMeasure.clamped(
++            textView.styleSheet.theme.typography.measureCharacters
+         )
+         let responsiveCharacters: CGFloat
+-        if bounds.width < 900 {
++        if bounds.width < 900 && renderedTarget <= 72 {
+             responsiveCharacters = 66
+-        } else if bounds.width > 1200 {
+-            responsiveCharacters = 72
+         } else {
+             responsiveCharacters = renderedTarget
+         }
+diff --git a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+index 2f314b6..0b0dd1a 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+@@ -503,7 +503,12 @@ extension MarkdownTextView {
+         // Sample inside the measure: the ornament itself lives in the hanging
+         // indent, where there are no glyphs to hit-test against.
+         let columnLeft = textContainerOrigin.x
+-        let sampleX = min(max(point.x, columnLeft + 1), columnLeft + styleSheet.measureWidth - 1)
++        // The live column, not the preferred measure: a wide measure setting
++        // is limited by the window.
++        let liveMeasure = (textContainer?.size.width).map { $0 - RenderMetrics.codeBleed }
++            ?? styleSheet.measureWidth
++        let measure = max(2, min(styleSheet.measureWidth, liveMeasure))
++        let sampleX = min(max(point.x, columnLeft + 1), columnLeft + measure - 1)
+         let pointOffset = sourceOffset(at: NSPoint(x: sampleX, y: point.y))
+         let bodySize = styleSheet.bodyFont().pointSize
+         for task in parsedDocument.tasks {
+diff --git a/Tests/DownrightAppTests/ReaderProfileTests.swift b/Tests/DownrightAppTests/ReaderProfileTests.swift
+index fe2c685..817a566 100644
+--- a/Tests/DownrightAppTests/ReaderProfileTests.swift
++++ b/Tests/DownrightAppTests/ReaderProfileTests.swift
+@@ -16,7 +16,8 @@ struct ReaderProfileTests {
+     @Test
+     func profileClampsReadingMeasure() {
+         #expect(ReaderProfile(id: "x", name: "x", measureCharacters: 10).measureCharacters == 68)
+-        #expect(ReaderProfile(id: "x", name: "x", measureCharacters: 100).measureCharacters == 72)
++        #expect(ReaderProfile(id: "x", name: "x", measureCharacters: 100).measureCharacters == 100)
++        #expect(ReaderProfile(id: "x", name: "x", measureCharacters: 100_000).measureCharacters == ReadingMeasure.maximumCharacters)
+     }
+ 
+     @Test
+diff --git a/Tests/MarkdownRenderTests/ThemeTests.swift b/Tests/MarkdownRenderTests/ThemeTests.swift
+index 45b6e77..ddb4c45 100644
+--- a/Tests/MarkdownRenderTests/ThemeTests.swift
++++ b/Tests/MarkdownRenderTests/ThemeTests.swift
+@@ -214,7 +214,7 @@ final class ThemeTests {
+         }
+     }
+ 
+-    @Test("Measure lands in the 68–72 character range")
++    @Test("Bundled themes ship a 68–72 character measure")
+     func measureWidthIsCapped() {
+         for theme in bundled() {
+             let sheet = StyleSheet(theme: theme, appearance: aqua)
+@@ -230,7 +230,12 @@ final class ThemeTests {
+         var theme = try #require(bundled().first)
+         theme.typography.measureCharacters = 400
+         var sheet = StyleSheet(theme: theme, appearance: aqua)
+-        expectClose(sheet.measureWidth / sheet.averageCharacterWidth, 72, within: 0.001, "clamped down to 72")
++        expectClose(sheet.measureWidth / sheet.averageCharacterWidth, 400, within: 0.001, "wide measure is honoured")
++
++        theme.typography.measureCharacters = 100_000
++        sheet = StyleSheet(theme: theme, appearance: aqua)
++        expectClose(sheet.measureWidth / sheet.averageCharacterWidth, ReadingMeasure.maximumCharacters,
++                    within: 0.001, "clamped to the full-width sentinel")
+ 
+         theme.typography.measureCharacters = 10
+         sheet = StyleSheet(theme: theme, appearance: aqua)

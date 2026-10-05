@@ -1,0 +1,175 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 09:52:38 -0400
+Subject: [PATCH 3/3] Tag every file the fork adds or changes with its
+ attribution
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Added files: "Authored by Claude Code as directed by Brad Nicholas
+<70774+bradn@users.noreply.github.com>". Changed upstream files:
+"Modified by …", crediting the Downright contributors for the original.
+Untouched upstream files keep no tag. Scripts/tag-attribution.py applies
+the rule against main and is idempotent; GIT-WORKFLOW.md "Attribution"
+documents it, and the README carries a visible credit line.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ Docs/QUICKLOOK.md                                              | 1 +
+ Scripts/install.sh                                             | 2 ++
+ Sources/DownrightApp/App/PreferencesWindowController.swift     | 2 ++
+ Sources/DownrightApp/Panels/ReaderProfilePickerView.swift      | 2 ++
+ Sources/DownrightApp/Support/Preferences.swift                 | 2 ++
+ Sources/DownrightApp/Support/ReaderProfiles.swift              | 2 ++
+ Sources/DownrightQL/PreviewViewController.swift                | 2 ++
+ Sources/MarkdownRender/RenderContracts.swift                   | 2 ++
+ Sources/MarkdownRender/Theme/PreviewAppearance.swift           | 2 ++
+ Sources/MarkdownRender/Theme/StyleSheet.swift                  | 2 ++
+ Sources/MarkdownRender/View/MarkdownContainerView.swift        | 2 ++
+ Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift | 2 ++
+ Tests/DownrightAppTests/ReaderProfileTests.swift               | 2 ++
+ Tests/MarkdownRenderTests/ThemeTests.swift                     | 2 ++
+ 14 files changed, 27 insertions(+)
+
+diff --git a/Docs/QUICKLOOK.md b/Docs/QUICKLOOK.md
+index 220e68c..4d1474a 100644
+--- a/Docs/QUICKLOOK.md
++++ b/Docs/QUICKLOOK.md
+@@ -1,3 +1,4 @@
++<!-- Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com> Original file by the Downright contributors (MIT); see git history for the changes. -->
+ # Quick Look
+ 
+ Downright contains code for two Quick Look extensions: a **preview**
+diff --git a/Scripts/install.sh b/Scripts/install.sh
+index 6576027..4138643 100755
+--- a/Scripts/install.sh
++++ b/Scripts/install.sh
+@@ -1,4 +1,6 @@
+ #!/bin/bash
++# Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++# Original file by the Downright contributors (MIT); see git history for the changes.
+ # Install Downright.app and the `down` CLI.
+ set -euo pipefail
+ 
+diff --git a/Sources/DownrightApp/App/PreferencesWindowController.swift b/Sources/DownrightApp/App/PreferencesWindowController.swift
+index 0cc966b..a214871 100644
+--- a/Sources/DownrightApp/App/PreferencesWindowController.swift
++++ b/Sources/DownrightApp/App/PreferencesWindowController.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import MarkdownCore
+ import MarkdownRender
+diff --git a/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift b/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
+index 3300632..433e2c9 100644
+--- a/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
++++ b/Sources/DownrightApp/Panels/ReaderProfilePickerView.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import MarkdownRender
+ 
+diff --git a/Sources/DownrightApp/Support/Preferences.swift b/Sources/DownrightApp/Support/Preferences.swift
+index ffe6ae8..5d5af68 100644
+--- a/Sources/DownrightApp/Support/Preferences.swift
++++ b/Sources/DownrightApp/Support/Preferences.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import MarkdownCore
+ import MarkdownRender
+diff --git a/Sources/DownrightApp/Support/ReaderProfiles.swift b/Sources/DownrightApp/Support/ReaderProfiles.swift
+index 44ad0c1..cf8874a 100644
+--- a/Sources/DownrightApp/Support/ReaderProfiles.swift
++++ b/Sources/DownrightApp/Support/ReaderProfiles.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import Foundation
+ import MarkdownRender
+ 
+diff --git a/Sources/DownrightQL/PreviewViewController.swift b/Sources/DownrightQL/PreviewViewController.swift
+index 2dc7223..c2256ee 100644
+--- a/Sources/DownrightQL/PreviewViewController.swift
++++ b/Sources/DownrightQL/PreviewViewController.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import MarkdownCore
+ import MarkdownRender
+diff --git a/Sources/MarkdownRender/RenderContracts.swift b/Sources/MarkdownRender/RenderContracts.swift
+index bcce840..b2fe8aa 100644
+--- a/Sources/MarkdownRender/RenderContracts.swift
++++ b/Sources/MarkdownRender/RenderContracts.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import MarkdownCore
+ 
+diff --git a/Sources/MarkdownRender/Theme/PreviewAppearance.swift b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+index 1343cfb..4083a5b 100644
+--- a/Sources/MarkdownRender/Theme/PreviewAppearance.swift
++++ b/Sources/MarkdownRender/Theme/PreviewAppearance.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import Foundation
+ 
+diff --git a/Sources/MarkdownRender/Theme/StyleSheet.swift b/Sources/MarkdownRender/Theme/StyleSheet.swift
+index 70a2984..fc3304a 100644
+--- a/Sources/MarkdownRender/Theme/StyleSheet.swift
++++ b/Sources/MarkdownRender/Theme/StyleSheet.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import CoreText
+ import MarkdownCore
+diff --git a/Sources/MarkdownRender/View/MarkdownContainerView.swift b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+index 9d9f3b9..4362d18 100644
+--- a/Sources/MarkdownRender/View/MarkdownContainerView.swift
++++ b/Sources/MarkdownRender/View/MarkdownContainerView.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import MarkdownCore
+ 
+diff --git a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+index 5eecd13..1aa8191 100644
+--- a/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
++++ b/Sources/MarkdownRender/View/MarkdownTextView+Interaction.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import MarkdownCore
+ 
+diff --git a/Tests/DownrightAppTests/ReaderProfileTests.swift b/Tests/DownrightAppTests/ReaderProfileTests.swift
+index 817a566..8bd158d 100644
+--- a/Tests/DownrightAppTests/ReaderProfileTests.swift
++++ b/Tests/DownrightAppTests/ReaderProfileTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import Foundation
+ import Testing
+diff --git a/Tests/MarkdownRenderTests/ThemeTests.swift b/Tests/MarkdownRenderTests/ThemeTests.swift
+index ddb4c45..a139943 100644
+--- a/Tests/MarkdownRenderTests/ThemeTests.swift
++++ b/Tests/MarkdownRenderTests/ThemeTests.swift
+@@ -1,3 +1,5 @@
++// Modified by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
++// Original file by the Downright contributors (MIT); see git history for the changes.
+ import AppKit
+ import Foundation
+ import MarkdownCore
