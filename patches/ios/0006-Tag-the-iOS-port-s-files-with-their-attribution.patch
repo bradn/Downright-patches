@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brad Nicholas <70774+bradn@users.noreply.github.com>
 Date: Mon, 5 Oct 2026 09:54:12 -0400
-Subject: [PATCH 6/6] Tag the iOS port's files with their attribution
+Subject: [PATCH 6/7] Tag the iOS port's files with their attribution
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

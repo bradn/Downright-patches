@@ -100,12 +100,15 @@ iCloud Drive hasn't been tried yet.
 - **Images:**
   - remote images over HTTPS, including SVG badges;
   - images inside a line, such as README badges in a row;
-  - `width` and `height` on `<img>`.
+  - `width` and `height` on `<img>`;
+  - animated GIF, PNG and WebP: they play when on screen, stay still with
+    Reduce Motion on, and decode frame by frame rather than all at once.
 - **Live reload:** reloads when another app changes the file, follows renames,
   and never writes to your file.
 
-**Not done yet:** editing, Quick Look and thumbnail extensions, Spotlight,
-and animated GIFs (they show a still frame). See
+**Not done yet:** editing, Quick Look and thumbnail extensions, and
+Spotlight. Animated images can't yet be tapped to play while Reduce Motion
+is on. See
 [`docs/IOS-PORT-PLAN.md`](docs/IOS-PORT-PLAN.md).
 
 **How it is built:**

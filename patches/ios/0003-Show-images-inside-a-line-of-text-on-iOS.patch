@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brad Nicholas <70774+bradn@users.noreply.github.com>
 Date: Mon, 5 Oct 2026 08:25:50 -0400
-Subject: [PATCH 3/6] Show images inside a line of text on iOS
+Subject: [PATCH 3/7] Show images inside a line of text on iOS
 
 Images that share a line with text or other markup (README badges,
 [![badge](...)](...), an <img> inside <a> or <p>) could not be block

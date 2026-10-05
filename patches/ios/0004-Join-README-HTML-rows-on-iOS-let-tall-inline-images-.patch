@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brad Nicholas <70774+bradn@users.noreply.github.com>
 Date: Mon, 5 Oct 2026 08:53:53 -0400
-Subject: [PATCH 4/6] Join README HTML rows on iOS; let tall inline images open
+Subject: [PATCH 4/7] Join README HTML rows on iOS; let tall inline images open
  their line
 
 HTML <p> and heading blocks written one element per source line now read

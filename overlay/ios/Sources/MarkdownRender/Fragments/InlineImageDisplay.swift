@@ -22,6 +22,14 @@ final class InlineImageContext {
     /// Called on the main queue when a picture lands, so the host can rebuild
     /// its presentation.  Hosts should coalesce: a badge row lands in a burst.
     var imageDidArrive: (@MainActor @Sendable () -> Void)?
+    #if os(iOS)
+    /// Animated pictures in the last build, for the reader to overlay.
+    struct AnimatedItem {
+        let sourceLocation: Int
+        let image: PlatformImage
+    }
+    var animatedItems: [AnimatedItem] = []
+    #endif
 
     var maximumPixelDimension: Int {
         min(2048, max(1, Int(ceil(max(maximumSize.width, maximumSize.height) * displayScale))))
@@ -159,6 +167,18 @@ enum InlineImageDisplay {
         let attachment = NSTextAttachment()
         attachment.image = image
         let size = fitted(requested(image.size, width: item.width, height: item.height), in: context.maximumSize)
+        #if os(iOS)
+        // An animated picture is played by a live view the reader places over
+        // this attachment (TextKit's own attachment views were not hosted by
+        // this reader's custom layout fragments).  The attachment keeps the
+        // space and shows nothing, so transparent frames don't reveal a still
+        // underneath.  Reduce Motion keeps the still; the reader rebuilds when
+        // it changes.
+        if image.animatedSource != nil, !AnimatedImageView.reduceMotion() {
+            attachment.image = UIGraphicsImageRenderer(size: size).image { _ in }
+            context.animatedItems.append(.init(sourceLocation: item.range.location, image: image))
+        }
+        #endif
         let font = styleSheet.bodyFont()
         // Pictures that fit the line (badges, icons) centre on the text;
         // taller ones sit on the descender, and the paragraph's lines grow to

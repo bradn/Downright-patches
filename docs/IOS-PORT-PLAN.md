@@ -522,39 +522,57 @@ Done (iOS only; the Mac renders exactly as before):
 - **Tall inline pictures** raise their paragraph's line height instead of
   overlapping the text above.
 
-Next: **animated GIFs.** Today every image, local or remote, block or
-inline, shows a single still frame (ImageIO decodes frame 0). README demo
-GIFs therefore do not move.
+**Animated GIFs (built 2026-10-05; iOS only, the Mac keeps still frames):**
+GIF, animated PNG and animated WebP play in the iOS reader: local or remote,
+block or inline. Code: `UIKitView/AnimatedImage.swift`.
 
-- **Formats:** GIF first. The same path covers animated PNG and WebP, since
-  ImageIO reports frame counts and delays for all three.
-- **Decoding:** read the frame count and per-frame delays from
-  `CGImageSource` (`kCGImagePropertyGIFDictionary`, unclamped delay, with
-  browsers' 0.1 s floor for zero delays). Downsample each frame to the same
-  pixel bound as still images, on a background queue.
-- **Playback:**
-  - Inline images: an `NSTextAttachmentViewProvider` gives the attachment a
-    real view (`UIImageView` or a layer swapping frames on a
-    `CADisplayLink`), so TextKit lays it out like the still version.
-  - Block images (`ImageFragment` draws into a context): an overlay layer
-    positioned on the fragment's picture rect, removed when the fragment
-    goes away.
-- **Limits:**
-  - A memory budget per image (for example 32 MB of decoded frames). Over
-    it, keep a small ring of frames decoded on demand, or fall back to the
-    still frame.
-  - Pause when scrolled off screen and when the app is in the background.
-  - Respect Reduce Motion: show the still frame, with tap to play.
-- **Mac:** unchanged (still frames), unless chosen later.
-- **Tests:**
-  - frame count and delays parsed from a fixture GIF, including the
-    zero-delay floor;
-  - Reduce Motion shows the still frame;
-  - over-budget GIFs fall back without decoding every frame;
-  - playback pauses off screen;
-  - a still image takes the existing path unchanged.
-- **Check by hand:** the Downright README demo GIF on the iPad simulator and
-  a real device, scrolling while it plays.
+- **Decoding streams; the planned frame budget was dropped.** The README demo
+  GIF is 150 frames of 800×450, 216 MB if decoded up front, so a per-image
+  budget would have meant a ~300px-wide picture or a still. Instead, as
+  browsers do:
+  - every decode path keeps producing a single still frame, carrying an
+    `AnimatedImageSource` (frame count, delays, loop count) attached to it;
+  - `AnimatedImageView` decodes the next frame on a background queue shortly
+    before it is due, at its own on-screen pixel size, and keeps about two
+    frames in memory.
+- **Timing:**
+  - delays come from the unclamped GIF/APNG/WebP properties, with browsers'
+    rule that 10 ms or less plays as 100 ms;
+  - loop count 0 plays forever; n plays n times, then rests on the last
+    frame.
+- **Playback is a live view over the picture, for block and inline alike.**
+  - Block images: `ImageFragment` draws the matte and shadow, skips the
+    still, and asks the reader to place the view over its rect.
+  - Inline images: the attachment keeps its space but shows nothing, and the
+    reader places the view over `frameForTextAttachment`. TextKit's own
+    attachment views (`NSTextAttachmentViewProvider`) were tried first: the
+    provider's view was created but never hosted in a window, reliably, by
+    this reader's custom layout fragments.
+  - The reader clears the overlays on every rebuild, and drawing re-places
+    the ones still needed.
+- **Runs only when worthwhile:**
+  - in a window and on screen; off screen it keeps its frame without
+    decoding;
+  - not with the app in the background;
+  - not with Reduce Motion on: then stills, and the reader rebuilds when the
+    setting changes.
+- **Tests:** `AnimatedImageTests` (shared, iOS) and
+  `RemoteImageLoaderTests`. They cover:
+  - timing, the zero-delay rule and loop counts from a generated GIF;
+  - single-frame images staying still;
+  - the frame sequence, forever and finite;
+  - bounded frame decode;
+  - one live view each for block and inline GIFs, and none with Reduce
+    Motion;
+  - remote GIFs carrying their animation.
+- **Checked by hand (iPad simulator):** the README demo GIF as a block image
+  and an inline remote GIF both animate, aligned with their space.
+
+Still to do:
+- Tap to play when Reduce Motion is on (the plan's intent); today it shows
+  the still only.
+- A real device, scrolling while it plays, and a large document full of
+  GIFs: placing inline overlays lays the document out up to each one.
 
 ## Phase 4: editing
 

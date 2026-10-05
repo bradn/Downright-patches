@@ -59,6 +59,9 @@ public final class MarkdownReaderView: UITextView {
     private let inlineImages = InlineImageContext()
     private var hasInlineImages = false
     private var inlineImageRefreshPending = false
+    /// Live views over animated block images, keyed by the image's source
+    /// offset; see `showAnimation`.
+    private var animationOverlays: [Int: AnimatedImageView] = [:]
     private var paragraphIndex: ParagraphIndex = .empty
     private var appliedColumn: CGFloat = 0
 
@@ -105,6 +108,9 @@ public final class MarkdownReaderView: UITextView {
         tap.cancelsTouchesInView = false
         tap.delegate = objectTapDelegate
         addGestureRecognizer(tap)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(reduceMotionChanged),
+            name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
     }
 
     @available(*, unavailable)
@@ -128,6 +134,9 @@ public final class MarkdownReaderView: UITextView {
     /// Re-decorates and re-presents the whole document.
     public func update(document: ParsedDocument) {
         guard let storage = contentStorage.textStorage else { return }
+        // Overlays describe the previous layout; drawing re-places the ones
+        // still needed.
+        removeAnimationOverlays()
         parsedDocument = document
         paragraphIndex = ParagraphIndex(text: storage.string as NSString)
         fragmentContext.paragraphIndex = paragraphIndex
@@ -166,6 +175,9 @@ public final class MarkdownReaderView: UITextView {
         // anything else reading attributes sees what the layout hid.
         PresentationMaps.applyHiddenAttribute(maps.hidden, to: storage, scope: nil)
         invalidateFragments(in: nil)
+        if !inlineImages.animatedItems.isEmpty {
+            DispatchQueue.main.async { [weak self] in self?.placeInlineAnimations() }
+        }
     }
 
     /// Pictures fit the prose column and most of the screen's height.
@@ -175,6 +187,7 @@ public final class MarkdownReaderView: UITextView {
                                           height: max(120, bounds.height * 0.7))
         inlineImages.displayScale = traitCollection.displayScale
         inlineImages.imageDidArrive = { [weak self] in self?.scheduleInlineImageRefresh() }
+        inlineImages.animatedItems = []
     }
 
     /// An arriving picture changes what the display map substitutes, so the
@@ -192,6 +205,69 @@ public final class MarkdownReaderView: UITextView {
             layoutIfNeeded()
             setContentOffset(offset, animated: false)
         }
+    }
+
+    // MARK: - Animated block images
+
+    /// Places (or moves) the live view for an animated block image.
+    /// `ImageFragment` calls this while drawing, so the view change waits for
+    /// the next turn rather than altering the hierarchy mid-draw.
+    nonisolated func showAnimation(_ image: UIImage, animation: AnimatedImageSource, key: Int,
+                                   containerRect: CGRect, cornerRadius: CGFloat) {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.placeAnimation(image, animation: animation, key: key,
+                                                            containerRect: containerRect, cornerRadius: cornerRadius) }
+        }
+    }
+
+    private func placeAnimation(_ image: UIImage, animation: AnimatedImageSource, key: Int,
+                                containerRect: CGRect, cornerRadius: CGFloat) {
+        let frame = containerRect.offsetBy(dx: textContainerInset.left, dy: textContainerInset.top)
+        if let view = animationOverlays[key], view.animation === animation {
+            if view.frame != frame { view.frame = frame }
+            return
+        }
+        animationOverlays[key]?.removeFromSuperview()
+        let view = AnimatedImageView(animation: animation, still: image.cgImage)
+        view.layer.cornerRadius = cornerRadius
+        view.layer.masksToBounds = true
+        view.frame = frame
+        addSubview(view)
+        animationOverlays[key] = view
+    }
+
+    /// Overlays for animated inline pictures, over the frame TextKit laid
+    /// each attachment out in.
+    private func placeInlineAnimations() {
+        let origin = contentStorage.documentRange.location
+        for item in inlineImages.animatedItems {
+            guard let animation = item.image.animatedSource else { continue }
+            let textKit = displayMap.textKitOffset(forSource: item.sourceLocation)
+            guard let location = contentStorage.location(origin, offsetBy: textKit),
+                  let through = contentStorage.location(location, offsetBy: 1) else { continue }
+            markdownLayoutManager.ensureLayout(for: NSTextRange(
+                location: markdownLayoutManager.documentRange.location, end: through)
+                ?? markdownLayoutManager.documentRange)
+            guard let fragment = markdownLayoutManager.textLayoutFragment(for: location) else { continue }
+            let attachment = fragment.frameForTextAttachment(at: location)
+            guard attachment.width > 0, attachment.height > 0 else { continue }
+            let frame = fragment.layoutFragmentFrame
+            placeAnimation(item.image, animation: animation, key: item.sourceLocation,
+                           containerRect: attachment.offsetBy(dx: frame.minX, dy: frame.minY),
+                           cornerRadius: 0)
+        }
+    }
+
+    private func removeAnimationOverlays() {
+        animationOverlays.values.forEach { $0.removeFromSuperview() }
+        animationOverlays.removeAll()
+    }
+
+    /// Reduce Motion decides between live and still pictures when the
+    /// presentation is built, so rebuild when it changes.
+    @objc private func reduceMotionChanged() {
+        guard contentStorage.textStorage?.length ?? 0 > 0 else { return }
+        update(document: parsedDocument)
     }
 
     /// Scoped layout invalidation, in source coordinates.

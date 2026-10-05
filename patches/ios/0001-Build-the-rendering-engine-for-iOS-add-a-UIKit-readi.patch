@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brad Nicholas <70774+bradn@users.noreply.github.com>
 Date: Sun, 4 Oct 2026 18:57:41 -0400
-Subject: [PATCH 1/6] Build the rendering engine for iOS; add a UIKit reading
+Subject: [PATCH 1/7] Build the rendering engine for iOS; add a UIKit reading
  surface
 
 Phase 1 and 2 of IOS-PORT-PLAN.md.

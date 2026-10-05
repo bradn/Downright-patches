@@ -1,4 +1,5 @@
 // Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+import ImageIO
 import MarkdownRender
 import XCTest
 @testable import DownrightIOS
@@ -55,6 +56,35 @@ final class RemoteImageLoaderTests: XCTestCase {
             let decoded = RemoteImageLoader.decode(data: data, response: response, error: error, maxPixelDimension: 64)
             guard case .failed = decoded else { return XCTFail("case \(index): \(decoded)") }
         }
+    }
+
+    func testGIFsCarryTheirAnimationAndStillsDoNot() throws {
+        let gif = try XCTUnwrap(RemoteImageLoaderTests.gifData(frames: 3))
+        guard case .image(let animated) = RemoteImageLoader.decode(
+            data: gif, response: response(200, mime: "image/gif"), error: nil, maxPixelDimension: 64)
+        else { return XCTFail("GIF did not decode") }
+        XCTAssertEqual(animated.animatedSource?.frameCount, 3)
+
+        guard case .image(let still) = RemoteImageLoader.decode(
+            data: png(width: 8, height: 8), response: response(200, mime: "image/png"), error: nil, maxPixelDimension: 64)
+        else { return XCTFail("PNG did not decode") }
+        XCTAssertNil(still.animatedSource)
+    }
+
+    private static func gifData(frames: Int) -> Data? {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, "com.compuserve.gif" as CFString, frames, nil)
+        else { return nil }
+        for index in 0..<frames {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+                UIColor(white: CGFloat(index) / CGFloat(frames), alpha: 1).setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            }
+            CGImageDestinationAddImage(destination, image.cgImage!, [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1],
+            ] as CFDictionary)
+        }
+        return CGImageDestinationFinalize(destination) ? data as Data : nil
     }
 
     func testSVGIsRecognisedByTypeOrContent() {

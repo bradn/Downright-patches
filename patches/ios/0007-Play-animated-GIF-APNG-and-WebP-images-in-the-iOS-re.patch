@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Brad Nicholas <70774+bradn@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 13:24:13 -0400
+Subject: [PATCH 7/7] Play animated GIF, APNG and WebP images in the iOS reader
+
+Decoders keep producing one still frame (all the Mac and every still path
+see) and attach an AnimatedImageSource: frame count, delays (10 ms or less
+plays as 100 ms, as in browsers) and loop count. AnimatedImageView streams
+frames, decoding the next one on a background queue at its on-screen size
+and keeping about two in memory: the README demo GIF is 216 MB if decoded
+up front. It runs only in a window, on screen, with the app active and
+Reduce Motion off.
+
+Block and inline images are played by a live view the reader places over
+the picture's space (ImageFragment's rect; frameForTextAttachment inline).
+NSTextAttachmentViewProvider was tried first; its views were never hosted
+by this reader's custom layout fragments.
+
+Tests: AnimatedImageTests and a RemoteImageLoader GIF test. check-ios 420
+tests; Mac check.sh unchanged at 1387.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+Authored by Claude Code as directed by Brad Nicholas <70774+bradn@users.noreply.github.com>
+ .../Fragments/BoundedImageCache.swift            |  6 ++++++
+ .../MarkdownRender/Fragments/ImageFragment.swift | 16 ++++++++++++++++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+index 763f409..9f69c99 100644
+--- a/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
++++ b/Sources/MarkdownRender/Fragments/BoundedImageCache.swift
+@@ -311,6 +311,12 @@ final class ImageRenderCache {
+         if let declared = properties?[kCGImagePropertyHasAlpha] as? Bool {
+             image.representations.first?.hasAlpha = declared
+         }
++        #else
++        // A multi-frame image (GIF, animated PNG or WebP) stays this still
++        // frame for every path that draws stills; the iOS reader plays it
++        // from the attached source (UIKitView/AnimatedImage.swift).  The Mac
++        // keeps upstream's still frame.
++        image.animatedSource = AnimatedImageSource(url: url)
+         #endif
+         return image
+     }
+diff --git a/Sources/MarkdownRender/Fragments/ImageFragment.swift b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+index 822ee74..47b2937 100644
+--- a/Sources/MarkdownRender/Fragments/ImageFragment.swift
++++ b/Sources/MarkdownRender/Fragments/ImageFragment.swift
+@@ -61,6 +61,7 @@ final class ImageFragment: DownrightFragment {
+     }
+ 
+     override func drawObject(at point: CGPoint, in cg: CGContext) {
++        let rawPoint = point
+         let point = columnOrigin(point)
+         guard isFirstParagraphOfBlock, let style = styleSheet else { return }
+         let picture = displaySize()
+@@ -78,7 +79,22 @@ final class ImageFragment: DownrightFragment {
+             cg.fillRect(rect, color: matte(for: image, style: style),
+                         radius: RenderMetrics.imageCornerRadius)
+             cg.restoreGState()
++            #if os(iOS)
++            // A context can't animate, so an animated picture is shown by a
++            // live view the reader places over this rect; drawing the still
++            // under it as well would show through transparent frames.
++            if let animation = image.animatedSource, !AnimatedImageView.reduceMotion(),
++               let reader = context?.readerView {
++                let frame = super.layoutFragmentFrame
++                let inContainer = rect.offsetBy(dx: frame.minX - rawPoint.x, dy: frame.minY - rawPoint.y)
++                reader.showAnimation(image, animation: animation, key: payload.sourceRange.location,
++                                     containerRect: inContainer, cornerRadius: RenderMetrics.imageCornerRadius)
++            } else {
++                draw(image: image, in: rect, in: cg, cornerRadius: RenderMetrics.imageCornerRadius)
++            }
++            #else
+             draw(image: image, in: rect, in: cg, cornerRadius: RenderMetrics.imageCornerRadius)
++            #endif
+             if style.theme.appearance == .dark {
+                 cg.setStrokeColor(style.text.withAlphaComponent(0.08).cgColor)
+                 cg.setLineWidth(1)

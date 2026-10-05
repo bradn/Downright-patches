@@ -146,7 +146,11 @@ final class RemoteImageLoader: RemoteImageLoading {
         // pictures to anyway.
         let sourceWidth = properties?[kCGImagePropertyPixelWidth] as? CGFloat ?? CGFloat(cgImage.width)
         let scale = sourceWidth > 0 ? max(1, CGFloat(cgImage.width) / sourceWidth) : 1
-        return .image(UIImage(cgImage: cgImage, scale: scale, orientation: .up))
+        let image = UIImage(cgImage: cgImage, scale: scale, orientation: .up)
+        // Multi-frame images keep this still frame plus their animation,
+        // which the reader plays (MarkdownRender's AnimatedImage.swift).
+        image.animatedSource = AnimatedImageSource(data: data)
+        return .image(image)
     }
 
     nonisolated static func looksLikeSVG(_ data: Data) -> Bool {

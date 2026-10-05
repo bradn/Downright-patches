@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brad Nicholas <70774+bradn@users.noreply.github.com>
 Date: Mon, 5 Oct 2026 09:03:36 -0400
-Subject: [PATCH 5/6] Comment the iOS port against upstream's original
+Subject: [PATCH 5/7] Comment the iOS port against upstream's original
  behaviour
 
 Records the findings the port relies on where the code uses them: why

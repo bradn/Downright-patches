@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Brad Nicholas <70774+bradn@users.noreply.github.com>
 Date: Mon, 5 Oct 2026 01:50:22 -0400
-Subject: [PATCH 2/6] Move iOS settings to the Settings app; load remote images
+Subject: [PATCH 2/7] Move iOS settings to the Settings app; load remote images
  on iOS
 
 Settings: appearance, themes, text size and line width move from a
