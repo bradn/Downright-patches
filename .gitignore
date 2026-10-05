@@ -5,3 +5,5 @@
 /verify-*.log
 # Your own Apple team ID and bundle prefix; assemble.sh copies it into work/.
 /Signing.local.xcconfig
+# macOS Finder metadata.
+.DS_Store
